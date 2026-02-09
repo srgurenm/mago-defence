@@ -1,0 +1,16 @@
+[build]
+  publish = "build/web"
+  command = ""
+
+# Esto es lo importante: Le dice a Netlify que NO comprima el juego
+[[headers]]
+  for = "/*.apk"
+  [headers.values]
+    Content-Type = "application/octet-stream"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Embedder-Policy = "require-corp"
+    Cross-Origin-Opener-Policy = "same-origin"
