@@ -21,3 +21,16 @@ env/
 build/
 # ...PERO obligamos a que SÍ suba la carpeta web final
 !build/web/
+
+# Forzar a Git a tratar estos archivos como binarios (sin tocar los saltos de línea)
+*.apk binary
+*.wav binary
+*.png binary
+*.jpg binary
+*.ogg binary
+*.ttf binary
+
+# Asegurar que los archivos de texto se manejen bien
+*.py text eol=lf
+*.html text eol=lf
+*.js text eol=lf
