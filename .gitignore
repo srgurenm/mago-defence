@@ -1,0 +1,23 @@
+# --- BASURA DE SISTEMA ---
+__pycache__/
+*.py[cod]
+*.spec
+.DS_Store
+Thumbs.db
+
+# --- CARPETAS PESADAS (¡ESTO ES LO QUE TE DA ERROR!) ---
+node_modules/
+venv/
+env/
+.git/
+
+# --- ARCHIVOS EJECUTABLES Y BINARIOS ---
+*.exe
+*.zip
+*.tar.gz
+
+# --- PYGBAG (Configuración especial para Netlify) ---
+# Ignoramos la carpeta de construcción general...
+build/
+# ...PERO obligamos a que SÍ suba la carpeta web final
+!build/web/
