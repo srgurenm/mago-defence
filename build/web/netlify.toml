@@ -1,13 +1,12 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    # Estas líneas permiten que el motor del juego cargue sin bloqueos de seguridad
     Cross-Origin-Embedder-Policy = "credentialless"
     Cross-Origin-Opener-Policy = "same-origin"
 
 [[headers]]
   for = "/*.apk"
   [headers.values]
-    # Esto evita que Netlify "rompa" el archivo al intentar comprimirlo
     Content-Type = "application/octet-stream"
-    Cache-Control = "no-cache"
+    # Evitamos que Netlify intente "ayudar" comprimiendo lo que ya está comprimido
+    Content-Encoding = "identity"
