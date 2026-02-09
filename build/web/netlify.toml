@@ -1,0 +1,12 @@
+[build]
+  publish = "build/web"
+  command = ""
+
+# Esto lo DEJAMOS: Evita que Netlify rompa el archivo del juego
+[[headers]]
+  for = "/*.apk"
+  [headers.values]
+    Content-Type = "application/octet-stream"
+    Cache-Control = "no-cache"
+
+# HE BORRADO LA PARTE DE "Cross-Origin" QUE DABA EL ERROR NUEVO
