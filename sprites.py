@@ -1186,12 +1186,12 @@ class TextoFlotante(pygame.sprite.Sprite):
     def __init__(self, x, y, texto, color=BLANCO, size=20):
         super().__init__()
         self.fuente = pygame.font.SysFont("Arial", size, True)
-        self.image = self.fuente.render(texto, True, color)
+        self.image = self.fuente.render(str(texto), True, color)
         self.rect = self.image.get_rect(center=(x, y))
         self.vy = -2.0
         self.alpha = 255
 
-    def update(self):
+    def update(self, *args, **kwargs):
         self.rect.y += self.vy
         self.alpha -= 5
         if self.alpha <= 0:

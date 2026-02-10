@@ -4,9 +4,17 @@
 
 # Esto lo DEJAMOS: Evita que Netlify rompa el archivo del juego
 [[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Embedder-Policy = "credentialless"
+    Cross-Origin-Opener-Policy = "same-origin"
+
+[[headers]]
   for = "/*.apk"
   [headers.values]
     Content-Type = "application/octet-stream"
     Cache-Control = "no-cache"
 
 # HE BORRADO LA PARTE DE "Cross-Origin" QUE DABA EL ERROR NUEVO
+    # Evitamos que Netlify intente "ayudar" comprimiendo lo que ya está comprimido
+    Content-Encoding = "identity"

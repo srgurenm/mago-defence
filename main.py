@@ -5,9 +5,10 @@ import random
 import math
 import os
 import json
+import webbrowser
 import settings
 from settings import *
-from sprites import Mago, Monstruo, PowerUp, Barrera, Particula, Boss, Corazon, ParticulaAmbiental, Proyectil, OrbeXP, Rayo, Orbital, Charco, BossSNAKE, LaserSNAKE, EscudoEspecial, CriticoHit, RayoImpacto
+from sprites import Mago, Monstruo, PowerUp, Barrera, Particula, Boss, Corazon, ParticulaAmbiental, Proyectil, OrbeXP, Rayo, Orbital, Charco, BossSNAKE, LaserSNAKE, EscudoEspecial, CriticoHit, RayoImpacto, TextoFlotante
 
 # Mixer pre-init ajustado
 pygame.mixer.pre_init(44100, -16, 2, 2048)
@@ -210,7 +211,8 @@ class Juego:
         self.rect_char_4 = pygame.Rect(ANCHO//2 + 170, ALTO//2 - 50, 170, 240)
         self.rect_char_5 = pygame.Rect(ANCHO//2 + 350, ALTO//2 - 50, 170, 240)  # snake
         
-        self.rect_btn_unlock_loco = pygame.Rect(ANCHO - 230, ALTO - 100, 210, 30)
+        # Boton "Donar" en Tienda
+        self.rect_btn_donacion = pygame.Rect(ANCHO//2 - 100, ALTO - 120, 200, 40)
 
         self.rect_mejora_1 = pygame.Rect(ANCHO//2 - 250, ALTO//2 - 50, 150, 200)
         self.rect_mejora_2 = pygame.Rect(ANCHO//2 - 75, ALTO//2 - 50, 150, 200)
@@ -256,6 +258,12 @@ class Juego:
             })
         self.particulas_ambiente = pygame.sprite.Group()
         self.opciones_mejora_actuales = [] 
+        
+        # OPTIMIZACION: Cache de texto
+        self.text_cache = {}
+        
+        # UI PAUSA
+        self.rect_btn_reiniciar = pygame.Rect(ANCHO//2 - 100, ALTO//2 + 80, 200, 40) 
 
     def cargar_recursos(self):
         try:
@@ -280,6 +288,15 @@ class Juego:
         vol = 0 if self.juego_silenciado else 1
         try: pygame.mixer.music.set_volume(0.18 * vol)
         except: pass
+
+    def abrir_enlace(self, url):
+        if sys.platform == 'emscripten':
+            try:
+                import js
+                js.window.open(url, '_blank')
+            except: pass
+        else:
+            webbrowser.open(url)
 
     def detectar_dispositivo_tactil(self):
         # En emscripten (web), verificar múltiples indicadores de dispositivo táctil
@@ -711,6 +728,10 @@ class Juego:
                 if getattr(bala, 'es_critico', False):
                     critico = CriticoHit(e.rect.centerx, e.rect.centery)
                     self.todos_sprites.add(critico)
+                else:
+                    # Floating Text for normal hits
+                    tf = TextoFlotante(e.rect.centerx, e.rect.top, str(int(bala.danio)), BLANCO, 16)
+                    self.todos_sprites.add(tf)
                 
                 if e.hp <= 0:
                     # FURIA ÍGNEA: Si el enemigo murió por quemadura, propaga a cercanos
@@ -757,6 +778,11 @@ class Juego:
                 for e in enemigos:
                      if random.random() < 0.1: self.explosion_efecto(e.rect.centerx, e.rect.centery, ROJO_ORBITAL)
                      e.hp -= orb.danio * 0.2 
+                     # Floating Text for orbital
+                     if random.random() < 0.3: # Reduce spam
+                        tf = TextoFlotante(e.rect.centerx, e.rect.top, str(int(orb.danio * 0.2)), ROJO_ORBITAL, 12)
+                        self.todos_sprites.add(tf)
+
                      if e.hp <= 0:
                          self.puntuacion += 10
                          self.explosion_efecto(e.rect.centerx, e.rect.centery, e.color)
@@ -780,7 +806,13 @@ class Juego:
                 es_rayo = getattr(b, 'es_rayo', False)
                 es_hielo = getattr(b, 'es_hielo', False)
                 if not es_rayo: b.kill()
-                self.boss_instancia.hp -= (40 if es_rayo else b.danio)
+                danio = 40 if es_rayo else b.danio
+                self.boss_instancia.hp -= danio
+                
+                # Floating Text Boss
+                tf = TextoFlotante(self.boss_instancia.rect.centerx + random.randint(-40, 40), self.boss_instancia.rect.centery + random.randint(-20, 20), str(int(danio)), ORO_PODER if es_rayo else BLANCO, 24 if es_rayo else 18)
+                self.todos_sprites.add(tf)
+
                 if es_hielo: self.boss_instancia.congelar()
                 self.explosion_efecto(b.rect.centerx, b.rect.centery, MORADO_OSCURO)
                 if self.boss_instancia.hp <= 0: 
@@ -891,21 +923,24 @@ class Juego:
                         b_m.kill(); b_e.kill()
                         break 
 
-        # COLISIONES LASER SNAKE
+        # OPTIMIZACION: COLISIONES LASER SNAKE
         for s in self.todos_sprites:
             if isinstance(s, LaserSNAKE):
-                # Usar una máscara o colisión por línea para el láser
-                # Para simplificar: chequear puntos a lo largo del rayo
+                # Usar clipline para deteccion precisa y rapida
                 rad = math.radians(s.angulo)
-                for d in range(0, 1000, 20):
-                    px = s.x + math.cos(rad) * d
-                    py = s.y + math.sin(rad) * d
-                    if self.mago.rect.collidepoint(px, py):
-                        self.mago.recibir_danio()
-                        break
-                    for b in self.barreras:
-                        if b.rect.collidepoint(px, py):
-                            break
+                fin_x = s.x + math.cos(rad) * 1000
+                fin_y = s.y + math.sin(rad) * 1000
+                
+                # Chequear si la linea del laser cruza el rectangulo del mago
+                clip = self.mago.rect.clipline(s.x, s.y, fin_x, fin_y)
+                if clip:
+                    self.mago.recibir_danio()
+                
+                # Chequear barreras
+                for b in self.barreras:
+                    if b.rect.clipline(s.x, s.y, fin_x, fin_y):
+                        # El laser atraviesa barreras? Si, es un laser gigante.
+                        pass
         
         # COLISIÓN BOSS SNAKE EMBISTIENDO
         if self.boss_instancia and hasattr(self.boss_instancia, 'embestiendo') and self.boss_instancia.embestiendo:
@@ -1155,13 +1190,23 @@ class Juego:
             self.dibujar_texto(info["nombre"], self.fuente_md, BLANCO, r.centerx, r.top + 30)
             self.dibujar_texto(f"Nivel: {lvl}/{info['max']}", self.fuente_sm, ORO_PODER, r.centerx, r.top + 60)
             costo = int(info["base"] * (FACTOR_COSTO_TIENDA ** lvl))
-            if lvl >= info["max"]: txt_costo = "MAXIMO"
-            else: txt_costo = f"{costo} Gemas"
-            c_precio = CIAN_MAGIA if self.gestor_datos.datos['cristales'] >= costo and lvl < info['max'] else ROJO_VIDA
+            if lvl >= info["max"]: 
+                txt_costo = "AGOTADO"
+                c_precio = GRIS_DESACTIVADO
+                # Visualmente indicar que esta maxed
+                pygame.draw.rect(self.pantalla, (0, 0, 0, 100), r, border_radius=15)
+            else: 
+                txt_costo = f"{costo} Gemas"
+                c_precio = CIAN_MAGIA if self.gestor_datos.datos['cristales'] >= costo else ROJO_VIDA
+            
             self.dibujar_texto(txt_costo, self.fuente_md, c_precio, r.centerx, r.bottom - 40)
             
         pygame.draw.rect(self.pantalla, ROJO_VIDA, self.rect_btn_volver_tienda, border_radius=10)
         self.dibujar_texto("VOLVER AL MENU", self.fuente_md, BLANCO, self.rect_btn_volver_tienda.centerx, self.rect_btn_volver_tienda.centery)
+
+        # Boton Donacion (Amarillo BuyMeACoffee)
+        pygame.draw.rect(self.pantalla, (255, 221, 0), self.rect_btn_donacion, border_radius=10)
+        self.dibujar_texto("Buy me a coffee", self.fuente_md, (0, 0, 0), self.rect_btn_donacion.centerx, self.rect_btn_donacion.centery)
 
     def dibujar_menu_debug(self):
         """Dibuja el menú de configuración de debug"""
@@ -1447,10 +1492,6 @@ class Juego:
             dibujar_char_card(self.rect_char_3, "cazador")
             dibujar_char_card(self.rect_char_4, "el_loco")
             dibujar_char_card(self.rect_char_5, "snake")
-
-            # Botón Temporal Unlocked
-            pygame.draw.rect(self.pantalla, (50, 50, 50), self.rect_btn_unlock_loco, border_radius=5)
-            self.dibujar_texto("DEBUG: UNLOCK EL LOCO", self.fuente_xs, BLANCO, self.rect_btn_unlock_loco.centerx, self.rect_btn_unlock_loco.centery)
             
             self.dibujar_texto("Presiona click para elegir y comenzar", self.fuente_sm, BLANCO, ANCHO//2, ALTO - 40)
 
@@ -1514,6 +1555,10 @@ class Juego:
                 overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA); overlay.fill((0, 0, 0, 190)); self.pantalla.blit(overlay, (0,0))
                 self.dibujar_texto("PAUSA", self.fuente_lg, BLANCO, ANCHO//2, ALTO//2 - 40)
                 self.dibujar_texto("M: Menú | Esc/P: Volver", self.fuente_sm, BLANCO, ANCHO//2, ALTO//2 + 30)
+                
+                # Boton Reiniciar
+                pygame.draw.rect(self.pantalla, ROJO_BORRAR, self.rect_btn_reiniciar, border_radius=10)
+                self.dibujar_texto("REINICIAR RUN", self.fuente_md, BLANCO, self.rect_btn_reiniciar.centerx, self.rect_btn_reiniciar.centery)
             
             if self.estado == ESTADO_TRANSICION:
                  overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA); overlay.fill((0, 0, 0, 150)); self.pantalla.blit(overlay, (0,0))
@@ -1686,7 +1731,13 @@ class Juego:
         self.pantalla.blit(s, (0, 0))
 
     def dibujar_texto(self, texto, fuente, color, x, y):
-        s = fuente.render(str(texto), True, color); r = s.get_rect(center=(x, y)); self.pantalla.blit(s, r)
+        key = (texto, fuente, color)
+        if key not in self.text_cache:
+            self.text_cache[key] = fuente.render(str(texto), True, color)
+        
+        s = self.text_cache[key]
+        r = s.get_rect(center=(x, y))
+        self.pantalla.blit(s, r)
 
     def update(self):
         self.manejar_ambiente()
@@ -1822,6 +1873,7 @@ class Juego:
                         elif self.rect_tienda_item_1.collidepoint(tx, ty): self.gestor_datos.comprar_mejora("vida_base")
                         elif self.rect_tienda_item_2.collidepoint(tx, ty): self.gestor_datos.comprar_mejora("danio_base")
                         elif self.rect_tienda_item_3.collidepoint(tx, ty): self.gestor_datos.comprar_mejora("critico")
+                        elif self.rect_btn_donacion.collidepoint(tx, ty): self.abrir_enlace("https://buymeacoffee.com/srgurem")
                     elif self.estado == ESTADO_DEBUG_MENU:
                         self._manejar_click_menu_debug(tx, ty)
                     elif self.estado == ESTADO_VICTORIA_FINAL:
@@ -1859,8 +1911,6 @@ class Juego:
                          elif self.rect_char_5.collidepoint(m_pos):
                              unlocked = self.gestor_datos.datos.get("unlocked_snake", False) or (DEBUG_MODE and DEBUG_ALL_UNLOCKED)
                              if unlocked: self.iniciar_partida("snake")
-                         elif self.rect_btn_unlock_loco.collidepoint(m_pos):
-                             self.gestor_datos.datos["unlocked_loco"] = True; self.gestor_datos.guardar()
                     elif self.estado == ESTADO_GAMEOVER and ahora - self.tiempo_estado_inicio > 2000: self.cambiar_estado(ESTADO_MENU)
                     elif self.estado == ESTADO_VICTORIA_FINAL:
                         if not hasattr(self, 'clicks_victoria'): self.clicks_victoria = 0
@@ -1892,8 +1942,10 @@ class Juego:
                         elif self.rect_tienda_item_1.collidepoint(m_pos): self.gestor_datos.comprar_mejora("vida_base")
                         elif self.rect_tienda_item_2.collidepoint(m_pos): self.gestor_datos.comprar_mejora("danio_base")
                         elif self.rect_tienda_item_3.collidepoint(m_pos): self.gestor_datos.comprar_mejora("critico")
+                        elif self.rect_btn_donacion.collidepoint(m_pos): self.abrir_enlace("https://buymeacoffee.com/srgurem")
                     elif self.estado == ESTADO_PAUSA:
-                        pass
+                        if self.rect_btn_reiniciar.collidepoint(m_pos):
+                             self.cambiar_estado(ESTADO_MENU)
                     elif self.estado == ESTADO_DEBUG_MENU:
                         self._manejar_click_menu_debug(m_pos[0], m_pos[1])
                 if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
