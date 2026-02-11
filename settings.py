@@ -138,7 +138,7 @@ CONFIG_PERSONAJES = {
         # STATS BASE
         "vida_inicial": 3,
         "vida_maxima": 4,
-        "danio_base": 20,
+        "danio_base": 15,
         "danio_multi": 1.5,
         "danio_escalado_por_nivel": 0.6,
         
@@ -147,7 +147,7 @@ CONFIG_PERSONAJES = {
         "cadencia_escalado": 0.90,
         "velocidad_proyectil": 5.0,
         "proyectiles_extra": 0,
-        "dispersion_angulo": 15,
+        "dispersion_angulo": 35,
         
         # MOVIMIENTO
         "velocidad_movimiento": 4.5,
