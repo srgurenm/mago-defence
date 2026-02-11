@@ -83,10 +83,10 @@ COLOR_NIEBLA_BRUMA = (200, 220, 230)
 
 # --- BALANCEO ROGUELIKE ---
 XP_POR_ENEMIGO = 1
-XP_BASE_REQUERIDA = 14 
+XP_BASE_REQUERIDA = 15
 XP_FACTOR_ESCALADO = 1.50 
 
-ESCALADO_CADENCIA_POR_NIVEL = 0.98 
+ESCALADO_CADENCIA_POR_NIVEL = 0.99 
 VELOCIDAD_DASH = 18
 DURACION_DASH = 150 
 
@@ -104,14 +104,14 @@ CONFIG_PERSONAJES = {
         "danio_escalado_por_nivel": 0.8,
         
         # ATAQUE
-        "cadencia_base_ms": 400,
+        "cadencia_base_ms": 450,
         "cadencia_escalado": 0.98,
         "velocidad_proyectil": 9.0,
         "proyectiles_extra": 0,
         "dispersion_angulo": 10,
         
         # MOVIMIENTO
-        "velocidad_movimiento": 6.0,
+        "velocidad_movimiento": 5.0,
         "dash_velocidad": 18,
         "dash_duracion_ms": 150,
         "dash_cooldown_ms": 1200,
@@ -136,7 +136,7 @@ CONFIG_PERSONAJES = {
     
     "piromante": {
         # STATS BASE
-        "vida_inicial": 4,
+        "vida_inicial": 3,
         "vida_maxima": 4,
         "danio_base": 20,
         "danio_multi": 1.5,
@@ -145,7 +145,7 @@ CONFIG_PERSONAJES = {
         # ATAQUE
         "cadencia_base_ms": 1200,
         "cadencia_escalado": 0.90,
-        "velocidad_proyectil": 8.0,
+        "velocidad_proyectil": 5.0,
         "proyectiles_extra": 0,
         "dispersion_angulo": 15,
         
@@ -186,7 +186,7 @@ CONFIG_PERSONAJES = {
         # ATAQUE
         "cadencia_base_ms": 750,
         "cadencia_escalado": 0.94,
-        "velocidad_proyectil": 10.0,
+        "velocidad_proyectil": 12.0,
         "proyectiles_extra": 1,
         "dispersion_angulo": 8,
         
@@ -197,7 +197,7 @@ CONFIG_PERSONAJES = {
         "dash_cooldown_ms": 1000,
         
         # CRÍTICO 
-        "chance_critico": 0.10,
+        "chance_critico": 0.15,
         "danio_critico": 2.0,
         
         # ESPECIAL
@@ -230,7 +230,7 @@ CONFIG_PERSONAJES = {
         "dispersion_angulo": 20,
         
         # MOVIMIENTO
-        "velocidad_movimiento": 7.5,
+        "velocidad_movimiento": 7.0,
         "dash_velocidad": 22,
         "dash_duracion_ms": 150,
         "dash_cooldown_ms": 800,
@@ -262,7 +262,7 @@ CONFIG_PERSONAJES = {
         "danio_escalado_por_nivel": 0.05,
         
         # ATAQUE - Sistema de carga (disparo único)
-        "cadencia_base_ms": 800,
+        "cadencia_base_ms": 80,
         "cadencia_escalado": 0.98,
         "velocidad_proyectil": 2.0,
         "proyectiles_extra": 0,
