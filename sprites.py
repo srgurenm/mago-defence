@@ -296,6 +296,18 @@ class Boss(pygame.sprite.Sprite):
         tinte = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
         tinte.fill((*AZUL_CONGELADO, 120)); self.image.blit(tinte, (0,0), special_flags=pygame.BLEND_RGBA_ADD)
 
+    def aplicar_glow(self, surf, color, intensity=0.5):
+        glow_surf = pygame.mask.from_surface(surf).to_surface(setcolor=(*color, int(255 * intensity)), unsetcolor=(0,0,0,0))
+        for i in range(2):
+             surf.blit(glow_surf, (random.randint(-3, 3), random.randint(-3, 3)), special_flags=pygame.BLEND_RGBA_ADD)
+        return surf
+
+    def aplicar_tint(self, surf, color):
+        tinte = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        tinte.fill((*color, 120))
+        surf.blit(tinte, (0,0), special_flags=pygame.BLEND_RGBA_ADD)
+        return surf
+
     def update(self, *args, **kwargs):
         ahora = kwargs.get('ahora', pygame.time.get_ticks())
         grupo_s = kwargs.get('grupo_s', None)
@@ -433,6 +445,8 @@ class Mago(pygame.sprite.Sprite):
         
         self.cargar_assets(cfg["color"])
         self.rect = self.image.get_rect(midbottom=(ANCHO // 2, ALTO - 40))
+        self.hitbox = self.rect.inflate(-self.rect.width/2, -self.rect.height/2)
+
         
         # Vida usando configuración de balanceo
         self.max_vidas = cfg["vida_maxima"] + meta_mejoras.get("vida_base", 0)
@@ -466,11 +480,11 @@ class Mago(pygame.sprite.Sprite):
         self.shield_regen_cd = 45000 # 45s base
         self.shield_max_hp = 1
         
-        # Habilidad especial del personaje
+        # Habilidad especial del personaje (se desbloquea en boss nivel 5)
         self.habilidad_especial = cfg["habilidad_especial"]
-        self.skill_burn = self.habilidad_especial == "explosion_quemadura"
-        self.burn_exp_damage = cfg.get("explosion_danio", 0.70) if self.skill_burn else 0
-        self.burn_exp_radius = cfg.get("explosion_radio", 70) if self.skill_burn else 0
+        self.skill_burn = False  # Solo se activa al matar boss nivel 5
+        self.burn_exp_damage = 0
+        self.burn_exp_radius = 0
         
         self.skill_pierce = False; self.shots_fired = 0
         self.pierce_freq = 4
@@ -535,16 +549,37 @@ class Mago(pygame.sprite.Sprite):
             self.skill_cancel_prob = 1.0  # 100% cancelación
 
     def cargar_assets(self, color):
+        scale_factor = 1.5
+        w, h = int(MAGO_ANCHO * scale_factor), int(MAGO_ALTO * scale_factor)
+        
         try:
-            self.imagen_normal = pygame.transform.scale(pygame.image.load(resolver_ruta(self.datos["sprite"])).convert_alpha(), (MAGO_ANCHO, MAGO_ALTO))
-            self.imagen_disparo = pygame.transform.scale(pygame.image.load(resolver_ruta(self.datos["sprite_disparo"])).convert_alpha(), (MAGO_ANCHO, MAGO_ALTO))
+            raw_normal = pygame.image.load(resolver_ruta(self.datos["sprite"])).convert_alpha()
+            raw_disparo = pygame.image.load(resolver_ruta(self.datos["sprite_disparo"])).convert_alpha()
+            self.imagen_normal = pygame.transform.scale(raw_normal, (w, h))
+            self.imagen_disparo = pygame.transform.scale(raw_disparo, (w, h))
         except:
-            self.imagen_normal = pygame.Surface((MAGO_ANCHO, MAGO_ALTO), pygame.SRCALPHA)
-            pygame.draw.polygon(self.imagen_normal, color, [(12, 0), (0, 24), (24, 24)])
-            pygame.draw.circle(self.imagen_normal, BLANCO, (8, 12), 3)
-            pygame.draw.circle(self.imagen_normal, BLANCO, (16, 12), 3)
+            self.imagen_normal = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.draw.polygon(self.imagen_normal, color, [(w//2, 0), (0, h), (w, h)])
+            pygame.draw.circle(self.imagen_normal, BLANCO, (w//3, h//2), 3)
+            pygame.draw.circle(self.imagen_normal, BLANCO, (2*w//3, h//2), 3)
             self.imagen_disparo = self.imagen_normal.copy()
-            pygame.draw.rect(self.imagen_disparo, CIAN_MAGIA, [0, 0, 24, 24], 2)
+            pygame.draw.rect(self.imagen_disparo, CIAN_MAGIA, [0, 0, w, h], 2)
+        
+        # Add subtle Glow
+        pad = 4
+        glow_surf = pygame.Surface((w+pad*2, h+pad*2), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (255, 255, 255, 35), ((w+pad*2)//2, (h+pad*2)//2), w//2 + 2)
+        
+        final_normal = pygame.Surface((w+pad*2, h+pad*2), pygame.SRCALPHA)
+        final_normal.blit(glow_surf, (0,0))
+        final_normal.blit(self.imagen_normal, (pad, pad))
+        self.imagen_normal = final_normal
+        
+        final_disparo = pygame.Surface((w+pad*2, h+pad*2), pygame.SRCALPHA)
+        final_disparo.blit(glow_surf, (0,0))
+        final_disparo.blit(self.imagen_disparo, (pad, pad))
+        self.imagen_disparo = final_disparo
+
         self.image = self.imagen_normal
 
     def dash(self):
@@ -595,7 +630,8 @@ class Mago(pygame.sprite.Sprite):
         if self.tipo == "snake":
             self.cargando = True
             # La carga escala con la velocidad de ataque
-            cadencia = (CADENCIA_BASE * (ESCALADO_CADENCIA_POR_NIVEL ** self.oleada_actual)) / self.stats["velocidad_ataque_multi"]
+            esc_cad = self.config.get("cadencia_escalado", ESCALADO_CADENCIA_POR_NIVEL)
+            cadencia = (CADENCIA_BASE * (esc_cad ** self.oleada_actual)) / self.stats["velocidad_ataque_multi"]
             # SINERGIA: Powerup de cadencia carga más rápido
             if self.powerup_actual == "cadencia": cadencia *= 0.4
             # Reducción de cadencia por powerups de disparo múltiple (también carga más rápido)
@@ -669,7 +705,8 @@ class Mago(pygame.sprite.Sprite):
             return
         
         ahora = pygame.time.get_ticks()
-        cadencia = (CADENCIA_BASE * (ESCALADO_CADENCIA_POR_NIVEL ** self.oleada_actual)) * self.stats["velocidad_ataque_multi"]
+        esc_cad = self.config.get("cadencia_escalado", ESCALADO_CADENCIA_POR_NIVEL)
+        cadencia = (CADENCIA_BASE * (esc_cad ** self.oleada_actual)) / self.stats["velocidad_ataque_multi"]
         if self.powerup_actual == "cadencia": cadencia *= 0.4
         elif self.powerup_actual == "disparo_doble": cadencia *= 1.25
         elif self.powerup_actual == "disparo_triple": cadencia *= 1.67
@@ -712,14 +749,11 @@ class Mago(pygame.sprite.Sprite):
                 if not (settings.DEBUG_MODE and settings.DEBUG_INFINITE_CHARGES): self.cargas -= 1
             
             # --- CLASS SKILLS LOGIC ---
-            es_quemadura = self.skill_burn
-            # FURIA ÍGNEA: probabilidad de quemar (30%)
-            if self.furia_ignea and random.random() < 0.30:
-                es_quemadura = True
+            es_quemadura = self.skill_burn or self.furia_ignea
             
             penetracion = 0
-            # TIRADOR DE SOMBRA: probabilidad de atravesar todos (20%)
-            if self.tirador_sombra and random.random() < 0.20:
+            # TIRADOR DE SOMBRA: probabilidad de atravesar todos (30%)
+            if self.tirador_sombra and random.random() < 0.30:
                 penetracion = 999  # Atraviesa todos los enemigos
             elif self.skill_pierce:
                 self.shots_fired += 1
@@ -735,15 +769,20 @@ class Mago(pygame.sprite.Sprite):
             if self.modificadores["arco"] or (self.powerup_actual == "arco" and (self.cargas > 0 or (settings.DEBUG_MODE and settings.DEBUG_INFINITE_CHARGES))):
                 v_arc_x = vel_p * 0.38 # Proporcional a la velocidad total
                 v_arc_y = -vel_p * 0.88
-                self.crear_bala(-v_arc_x, v_arc_y, danio, es_exp, target, es_hielo, es_frag, es_quemadura=es_quemadura, penetracion=penetracion, es_homing=es_homing, es_critico=es_critico)
-                self.crear_bala(v_arc_x, v_arc_y, danio, es_exp, target, es_hielo, es_frag, es_quemadura=es_quemadura, penetracion=penetracion, es_homing=es_homing, es_critico=es_critico)
+                
+                # Diferenciación Arco: 15% bounce, 15% pierce 1
+                p_arco_bounce = 1 if random.random() < 0.15 else 0
+                p_arco_pierce = 1 if random.random() < 0.15 else 0
+                
+                self.crear_bala(-v_arc_x, v_arc_y, danio, es_exp, target, es_hielo, es_frag, es_quemadura=es_quemadura, penetracion=p_arco_pierce, rebotes=p_arco_bounce, es_homing=es_homing, es_critico=es_critico)
+                self.crear_bala(v_arc_x, v_arc_y, danio, es_exp, target, es_hielo, es_frag, es_quemadura=es_quemadura, penetracion=p_arco_pierce, rebotes=p_arco_bounce, es_homing=es_homing, es_critico=es_critico)
                 if self.powerup_actual == "arco": 
                     if not (settings.DEBUG_MODE and settings.DEBUG_INFINITE_CHARGES): self.cargas -= 1
             
             if self.cargas <= 0 and not (settings.DEBUG_MODE and settings.DEBUG_INFINITE_CHARGES) and self.powerup_actual in ["arco", "disparo_doble", "disparo_triple", "explosivo", "rayo", "homing"]: 
                 self.powerup_actual = "normal"
 
-    def crear_bala(self, vx, vy, danio, es_exp, target, es_hielo, es_frag, es_quemadura=False, penetracion=0, es_homing=False, es_critico=False):
+    def crear_bala(self, vx, vy, danio, es_exp, target, es_hielo, es_frag, es_quemadura=False, penetracion=0, rebotes=0, es_homing=False, es_critico=False):
         c = NARANJA_FUEGO if es_exp else ((100, 255, 100) if self.stats["rebotes"] > 0 else CIAN_MAGIA)
         pen_total = self.stats["penetracion"] + penetracion
         furia = self.furia_ignea
@@ -856,6 +895,10 @@ class Mago(pygame.sprite.Sprite):
                 for o in self.orbitales_grupo: o.kill()
             else: 
                 self.orbitales_grupo.update(self.rect.centerx, self.rect.centery)
+        
+        # Sync hitbox
+        if hasattr(self, 'hitbox'):
+             self.hitbox.center = self.rect.center
 
     def aplicar_ralentizacion(self):
         self.fin_ralentizado = pygame.time.get_ticks() + DURACION_RALENTIZADO
@@ -974,6 +1017,21 @@ class Monstruo(pygame.sprite.Sprite):
                 if self.rebotes_restantes <= 0:
                     self.kill()
 
+        # DAÑO POR QUEMADURA (1 daño cada segundo por 5 segundos)
+        if self.quemado:
+            if ahora - self.ultimo_dano_quemadura > 1000:
+                self.hp -= 1
+                self.ultimo_dano_quemadura = ahora
+                if self.hp <= 0:
+                    self.murio_por_quemadura = True
+                    if self.furia_ignea_activa:
+                        monstruos = kwargs.get('monstruos', None)
+                        if monstruos:
+                            self.propagar_quemadura(monstruos)
+            
+            # Expire burn after 5s
+            if ahora - self.quemado_timer > 5000: self.quemado = False
+
         # --- ANIMACIÓN ---
         if ahora - self.anim_timer > self.anim_delay:
             self.anim_timer = ahora
@@ -987,16 +1045,6 @@ class Monstruo(pygame.sprite.Sprite):
                 tint = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
                 tint.fill((255, 50, 0, 100))
                 self.image.blit(tint, (0,0), special_flags=pygame.BLEND_RGBA_ADD)
-                 
-                # DAÑO POR QUEMADURA (1 daño cada segundo por 3 segundos)
-                if ahora - self.ultimo_dano_quemadura > 1000:
-                    self.hp -= 1
-                    self.ultimo_dano_quemadura = ahora
-                    if self.hp <= 0:
-                        self.murio_por_quemadura = True
-                
-                # Expire burn after 3s (or keep it until death? User said "leaves it burning")
-                if ahora - self.quemado_timer > 3000: self.quemado = False
 
     def bajar(self):
         if not self.congelado: 
@@ -1247,7 +1295,7 @@ class EscudoEspecial(pygame.sprite.Sprite):
         self.alto = 40
         self.rect = pygame.Rect(0, 0, self.ancho, self.alto)
         self.rebotado = False
-        self.cooldown_reaparecer = 10000
+        self.cooldown_reaparecer = 16000
         self.timer_desaparicion = 0
         self.timer_reaparicion = 0
         self.activo = False
@@ -1296,11 +1344,15 @@ class RayoPlayer(pygame.sprite.Sprite):
         self.longitud_max = longitud_max
         self.mago = mago
         
-        self.es_rayo = True
         if danio is not None:
             self.danio = danio
         else:
             self.danio = (0.5 if mago else 150) * (0.3 + (0.7 * potencia))
+        
+        self.es_rayo = True
+        self.es_rayo_player = True
+        # Guardar daño base antes de la reducción contra bosses
+        self.danio_original = self.danio
         self.penetracion = 999
         self.enemigos_atacados = []
         

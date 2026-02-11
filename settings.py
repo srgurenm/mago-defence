@@ -16,6 +16,7 @@ def resolver_ruta(ruta_relativa):
 ANCHO = 800
 ALTO = 600
 FPS = 60
+VERSION = "1.0.1"
 
 # --- ESTADOS DEL JUEGO ---
 ESTADO_MENU = 0
@@ -82,7 +83,7 @@ COLOR_NIEBLA_BRUMA = (200, 220, 230)
 
 # --- BALANCEO ROGUELIKE ---
 XP_POR_ENEMIGO = 1
-XP_BASE_REQUERIDA = 20 
+XP_BASE_REQUERIDA = 14 
 XP_FACTOR_ESCALADO = 1.50 
 
 ESCALADO_CADENCIA_POR_NIVEL = 0.98 
@@ -100,11 +101,11 @@ CONFIG_PERSONAJES = {
         "vida_maxima": 3,
         "danio_base": 10,
         "danio_multi": 1.0,
-        "danio_escalado_por_nivel": 0.5,
+        "danio_escalado_por_nivel": 0.8,
         
         # ATAQUE
         "cadencia_base_ms": 400,
-        "cadencia_escalado": 0.96,
+        "cadencia_escalado": 0.98,
         "velocidad_proyectil": 9.0,
         "proyectiles_extra": 0,
         "dispersion_angulo": 10,
@@ -139,10 +140,10 @@ CONFIG_PERSONAJES = {
         "vida_maxima": 4,
         "danio_base": 20,
         "danio_multi": 1.5,
-        "danio_escalado_por_nivel": 0.3,
+        "danio_escalado_por_nivel": 0.6,
         
         # ATAQUE
-        "cadencia_base_ms": 50,
+        "cadencia_base_ms": 1200,
         "cadencia_escalado": 0.90,
         "velocidad_proyectil": 8.0,
         "proyectiles_extra": 0,
@@ -180,10 +181,10 @@ CONFIG_PERSONAJES = {
         "vida_maxima": 3,
         "danio_base": 5,
         "danio_multi": 0.5,
-        "danio_escalado_por_nivel": 0.4,
+        "danio_escalado_por_nivel": 0.5,
         
         # ATAQUE
-        "cadencia_base_ms": 250,
+        "cadencia_base_ms": 750,
         "cadencia_escalado": 0.94,
         "velocidad_proyectil": 10.0,
         "proyectiles_extra": 1,
@@ -217,12 +218,12 @@ CONFIG_PERSONAJES = {
         # STATS BASE
         "vida_inicial": 2,
         "vida_maxima": 2,
-        "danio_base": 1,
+        "danio_base": 1.0,
         "danio_multi": 0.1,
-        "danio_escalado_por_nivel": 0.1,
+        "danio_escalado_por_nivel": 0.05,
         
         # ATAQUE - Cadencia extrema
-        "cadencia_base_ms": 2600,
+        "cadencia_base_ms": 150,
         "cadencia_escalado": 0.99,
         "velocidad_proyectil": 5.0,
         "proyectiles_extra": 0,
@@ -343,9 +344,9 @@ MAX_VIDAS_BASE = 3
 # --- META-PROGRESIÓN ---
 FACTOR_COSTO_TIENDA = 1.6 
 PRECIOS_TIENDA = {
-    "vida_base": {"base": 150, "max": 10, "nombre": "VIDA INICIAL"},
-    "danio_base": {"base": 200, "max": 20, "nombre": "PODER ARCANO"},
-    "critico": {"base": 300, "max": 10, "nombre": "SUERTE CRÍTICA"},
+    "vida_base": {"base": 100, "max": 10, "nombre": "VIDA"},
+    "danio_base": {"base": 100, "max": 20, "nombre": "Daño"},
+    "critico": {"base": 200, "max": 10, "nombre": "%Critico"},
 }
 
 # --- PROGRESIÓN IN-GAME ---
@@ -452,7 +453,7 @@ POWERUPS_STATS = {
     "cadencia": {"duracion": 8000}, "arco": {"cargas": 6}, "disparo_doble": {"cargas": 8},
     "disparo_triple": {"cargas": 5}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9000},
     "doble_danio": {"duracion": 9000},
-    "rayo": {"cargas": 3},
+    "rayo": {"cargas": 2},
     "orbital": {"duracion": 15000},
     "homing": {"cargas": 12}
 }

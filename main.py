@@ -13,6 +13,13 @@ from sprites import Mago, Monstruo, PowerUp, Barrera, Particula, Boss, Corazon, 
 # Mixer pre-init ajustado
 pygame.mixer.pre_init(44100, -16, 2, 2048)
 
+
+# --- HELPER DE COLISION ---
+def collided_hitbox(left, right):
+    rect_left = getattr(left, 'hitbox', left.rect)
+    rect_right = getattr(right, 'hitbox', right.rect)
+    return rect_left.colliderect(rect_right)
+
 class GestorDatos:
     def __init__(self):
         self.archivo = resolver_ruta("save_data_rogue.json")
@@ -436,7 +443,7 @@ class Juego:
     def iniciar_partida(self, tipo_personaje):
         self.tipo_personaje_seleccionado = tipo_personaje
         self.puntuacion = 0
-        self.nivel = DEBUG_NIVEL_INICIO if DEBUG_MODE else 1
+        self.nivel = settings.DEBUG_NIVEL_INICIO if settings.DEBUG_MODE else 1
         self.tiempo_sin_powerup = 0
         self.ultimo_spawn_powerup_cielo = 0
         self.inicializar_grupos()
@@ -557,57 +564,36 @@ class Juego:
     def generar_opciones_boss(self):
         self.opciones_boss = []
         
-        # HABILIDAD ESPECIAL ÚNICA DEL PERSONAJE (Solo en Nivel 5)
-        # Usar flag guardado en recompensar_boss() ya que el nivel ya fue incrementado
+        # HABILIDAD ESPECIAL UNICA DEL PERSONAJE (Solo en Nivel 5)
         if getattr(self, 'es_boss_nivel_5', False):
-            if self.mago.tipo == "MAGO" and not self.mago.escudo_especial_desbloqueado:
-                self.opciones_boss = [{"id": "unlock_escudo_especial", "titulo": "ESPEJO ARCANO", "desc": "Escudo frontal que rebota proyectiles enemigos (10s CD).", "color": AZUL_MAGO}]
-            elif self.mago.tipo == "piromante":
-                self.opciones_boss = [{"id": "unlock_furia_ignea", "titulo": "FURIA ÍGNEA", "desc": "Al matar enemigos, explotan en cadena.", "color": NARANJA_FUEGO}]
-            elif self.mago.tipo == "cazador":
-                self.opciones_boss = [{"id": "unlock_tirador_sombra", "titulo": "TIRADOR DE SOMBRA", "desc": "Disparos críticos atraviesan enemigos.", "color": VERDE_BARRERA}]
-            elif self.mago.tipo == "el_loco":
-                self.opciones_boss = [{"id": "unlock_tormenta_caos", "titulo": "TORMENTA DE CAOS", "desc": "Las balas tienen 20% probabilidad de dividirse.", "color": (200, 255, 0)}]
-            elif self.mago.tipo == "snake":
-                self.opciones_boss = [{"id": "unlock_serpentina", "titulo": "SANGRE DE SERPIENTE", "desc": "+1 Vida, Cura completa, Proyectiles +20% Velocidad.", "color": (0, 200, 0)}]
-        
-        # Si no es nivel 5 o ya está desbloqueada, mostrar mejoras normales
-        if not self.opciones_boss:
             if self.mago.tipo == "MAGO":
-                if not self.mago.skill_shield:
-                     self.opciones_boss = [{"id": "unlock_shield", "titulo": "DESBLOQUEAR ESCUDO", "desc": "Protege de 1 golpe (45s CD).", "color": AZUL_MAGO}]
-                else:
-                     self.opciones_boss = [
-                         {"id": "shield_cd", "titulo": "CARGA RÁPIDA", "desc": "Reduce CD del escudo -10s.", "color": CIAN_MAGIA},
-                         {"id": "shield_hp", "titulo": "ESCUDO REFORZADO", "desc": "El escudo aguanta +1 golpe.", "color": AZUL_MAGO}
-                     ]
+                self.opciones_boss = [{"id": "unlock_escudo_especial", "titulo": "ESPEJO ARCANO", "desc": "Escudo que rebota proyectiles (30s CD, 2x dano).", "color": AZUL_MAGO}]
             elif self.mago.tipo == "piromante":
-                if not self.mago.skill_burn:
-                     self.opciones_boss = [{"id": "unlock_burn", "titulo": "ESCISIÓN ÍGNEA", "desc": "Enemigos quemados explotan al morir.", "color": NARANJA_FUEGO}]
-                else:
-                     self.opciones_boss = [
-                         {"id": "burn_dmg", "titulo": "INCINERACIÓN", "desc": "Explosiones hacen +25% daño.", "color": ROJO_VIDA},
-                         {"id": "burn_rad", "titulo": "ONDA TÉRMICA", "desc": "Explosiones llegan 30% más lejos.", "color": NARANJA_FUEGO}
-                     ]
+                self.opciones_boss = [{"id": "unlock_furia_ignea", "titulo": "FURIA IGNEA", "desc": "Quema enemigos 5s (1 dmg/s). Muertos propagan.", "color": NARANJA_FUEGO}]
             elif self.mago.tipo == "cazador":
-                if not self.mago.skill_pierce:
-                     self.opciones_boss = [{"id": "unlock_pierce", "titulo": "TIRO DE PRECISIÓN", "desc": "Cada 4 tiros, uno atraviesa +3.", "color": VERDE_BARRERA}]
-                else:
-                     self.opciones_boss = [
-                         {"id": "pierce_freq", "titulo": "CADENCIA CRÍTICA", "desc": "Dispara perforante más seguido.", "color": CIAN_MAGIA},
-                         {"id": "pierce_count", "titulo": "FLECHA MAESTRA", "desc": "Atraviesa a +2 enemigos extra.", "color": VERDE_BARRERA}
-                     ]
+                self.opciones_boss = [{"id": "unlock_tirador_sombra", "titulo": "TIRADOR DE SOMBRA", "desc": "30% de atravesar todo +15% critico.", "color": VERDE_BARRERA}]
             elif self.mago.tipo == "el_loco":
-                if self.mago.skill_cancel_prob <= 0:
-                     self.opciones_boss = [{"id": "unlock_cancel", "titulo": "PARADA MÁGICA", "desc": "15% prob. de destruir balas enemigas al chocar.", "color": (200, 255, 0)}]
-                else:
-                     self.opciones_boss = [
-                         {"id": "cancel_prob", "titulo": "REFLEJOS LOCOS", "desc": "Sube +10% la probabilidad de parada.", "color": CIAN_MAGIA},
-                         {"id": "loco_dmg", "titulo": "FUERZA BRUTA", "desc": "Mejora el daño x0.1 (multiplicado por 0.5).", "color": ROJO_VIDA}
-                     ]
+                self.opciones_boss = [{"id": "unlock_tormenta_caos", "titulo": "FUERZA BRUTA", "desc": "+1 punto de Dano.", "color": (200, 255, 0)}]
+            elif self.mago.tipo == "snake":
+                self.opciones_boss = [{"id": "unlock_serpentina", "titulo": "SANGRE DE SERPIENTE", "desc": "+1 Vida, Cura, Velocidad disparo x2.", "color": (0, 200, 0)}]
+        
+        # Si no es nivel 5, no hay opciones (solo XP y heal automatico)
         
     def aplicar_recompensa_boss(self, indice):
-        if indice >= len(self.opciones_boss): return
+        if indice >= len(self.opciones_boss):
+            # No hay opciones (boss no-nivel-5): solo dar XP
+            if hasattr(self, 'xp_pendiente_boss') and self.xp_pendiente_boss > 0:
+                if self.mago.ganar_xp(self.xp_pendiente_boss):
+                    self.cambiar_estado(ESTADO_SELECCION_MEJORA)
+                    if self.snd_nivel and not self.juego_silenciado: self.snd_nivel.play()
+                self.xp_pendiente_boss = 0
+            else:
+                if self.boss_instancia and self.boss_instancia.destruyendo:
+                    self.boss_instancia.kill()
+                    self.boss_instancia = None
+                self.estado = ESTADO_JUGANDO
+            return
+        
         opt = self.opciones_boss[indice]
         tid = opt["id"]
         
@@ -615,53 +601,35 @@ class Juego:
             self.mago.escudo_especial_desbloqueado = True
             self.mago.escudo_especial = EscudoEspecial(self.mago)
             self.mago.escudo_especial.activar()
+            self.mago.shield_regen_cd = 16000  # 16 segundos de cooldown
             self.todos_sprites.add(self.mago.escudo_especial)
-            self.notificacion_powerup = "¡ESPEJO ARCANO DESBLOQUEADO!"
+            self.notificacion_powerup = "ESPEJO ARCANO DESBLOQUEADO!"
             self.tiempo_notificacion_powerup = pygame.time.get_ticks()
         elif tid == "unlock_furia_ignea":
             self.mago.furia_ignea = True
             self.mago.skill_burn = True
-            self.mago.burn_exp_damage = 0.80
+            self.mago.burn_exp_damage = 1.0  # 1 dmg por tick
             self.mago.burn_exp_radius = 100
-            self.notificacion_powerup = "¡FURIA ÍGNEA DESBLOQUEADA!"
+            self.mago.burn_duration = 5000  # 5 segundos
+            self.notificacion_powerup = "FURIA IGNEA DESBLOQUEADA!"
             self.tiempo_notificacion_powerup = pygame.time.get_ticks()
         elif tid == "unlock_tirador_sombra":
             self.mago.tirador_sombra = True
             self.mago.skill_pierce = True
-            self.mago.pierce_freq = 3
-            self.mago.pierce_count = 5
-            self.notificacion_powerup = "¡TIRADOR DE SOMBRA DESBLOQUEADO!"
+            self.mago.pierce_freq = 1  # Cada disparo tiene chance
+            self.mago.pierce_count = 999  # Atraviesa todos
+            self.mago.stats["chance_critico"] += 0.15  # +15% crit
+            self.notificacion_powerup = "TIRADOR DE SOMBRA DESBLOQUEADO!"
             self.tiempo_notificacion_powerup = pygame.time.get_ticks()
         elif tid == "unlock_tormenta_caos":
-            self.mago.stats["danio_multi"] += 1.0
-            self.notificacion_powerup = "¡TORMENTA DE CAOS DESBLOQUEADA!"
+            self.mago.stats["danio_multi"] += 1.0  # +1 punto de dano
+            self.notificacion_powerup = "FUERZA BRUTA DESBLOQUEADA!"
             self.tiempo_notificacion_powerup = pygame.time.get_ticks()
-        elif tid == "unlock_rayo_supremo":
-            self.mago.danio_carga_max = 4.0
-            self.mago.velocidad_carga_max = 2.0
-        
-        elif tid == "unlock_shield": self.mago.skill_shield = True; self.mago.shield_hp = 1
-        elif tid == "shield_cd": self.mago.shield_regen_cd = max(5000, self.mago.shield_regen_cd - 10000)
-        elif tid == "shield_hp": self.mago.shield_max_hp += 1; self.mago.shield_hp = self.mago.shield_max_hp
-        
-        elif tid == "unlock_burn": self.mago.skill_burn = True
-        elif tid == "burn_dmg": self.mago.burn_exp_damage += 0.25
-        elif tid == "burn_rad": self.mago.burn_exp_radius += 25
-        
-        elif tid == "unlock_pierce": self.mago.skill_pierce = True
-        elif tid == "pierce_freq": self.mago.pierce_freq = max(1, self.mago.pierce_freq - 1)
-        elif tid == "pierce_count": self.mago.pierce_count += 2
-        
-        elif tid == "unlock_cancel": self.mago.skill_cancel_prob = 0.15
-        elif tid == "cancel_prob": self.mago.skill_cancel_prob = min(0.60, self.mago.skill_cancel_prob + 0.10)
-        elif tid == "loco_dmg": self.mago.stats["danio_multi"] += 0.05 # Mitad que el 0.1 standard
-        
         elif tid == "unlock_serpentina":
-            self.mago.vidas = self.mago.max_vidas
-            self.mago.vidas += 1
             self.mago.max_vidas += 1
-            self.mago.stats["velocidad_proyectil"] *= 1.2
-            self.notificacion_powerup = "¡SANGRE DE SERPIENTE DESBLOQUEADA!"
+            self.mago.vidas = self.mago.max_vidas  # Cura completa
+            self.mago.stats["velocidad_ataque_multi"] *= 0.5  # Duplicar velocidad de disparo (reducir intervalo)
+            self.notificacion_powerup = "SANGRE DE SERPIENTE DESBLOQUEADA!"
             self.tiempo_notificacion_powerup = pygame.time.get_ticks()
         
         if hasattr(self, 'xp_pendiente_boss') and self.xp_pendiente_boss > 0:
@@ -680,7 +648,8 @@ class Juego:
         ahora, md = pygame.time.get_ticks(), 2 if self.mago.doble_danio_activo else 1
         
         # Mago recoge XP
-        for orbe in pygame.sprite.spritecollide(self.mago, self.orbes_xp, True):
+        # Mago recoge XP
+        for orbe in pygame.sprite.spritecollide(self.mago, self.orbes_xp, True, collided=collided_hitbox):
             if self.mago.ganar_xp(orbe.valor):
                  self.cambiar_estado(ESTADO_SELECCION_MEJORA)
                  if self.snd_nivel and not self.juego_silenciado: self.snd_nivel.play()
@@ -806,7 +775,10 @@ class Juego:
                 es_rayo = getattr(b, 'es_rayo', False)
                 es_hielo = getattr(b, 'es_hielo', False)
                 if not es_rayo: b.kill()
-                danio = 40 if es_rayo else b.danio
+                if getattr(b, 'es_rayo_player', False):
+                    danio = 2 # Daño continuo (por frame)
+                else:
+                    danio = 15 if es_rayo else b.danio
                 self.boss_instancia.hp -= danio
                 
                 # Floating Text Boss
@@ -826,6 +798,8 @@ class Juego:
                             self.boss_instancia.kill()
                         self.boss_instancia = None
                         self.gestor_datos.agregar_cristales(100)
+                        # DESBLOQUEO DE PERSONAJES
+                        self.gestor_datos.datos["unlocked_loco"] = True
                         if self.dificultad == MODO_DIFICIL:
                             self.gestor_datos.datos["unlocked_snake"] = True
                             self.gestor_datos.guardar()
@@ -836,17 +810,22 @@ class Juego:
                         # BOSS NIVEL 5: Recompensa especial. Lo matamos y llamamos a recompensar.
                         if self.boss_instancia: self.boss_instancia.kill()
                         self.boss_instancia = None
-                        self.nivel += 1  # INCREMENTAR NIVEL ANTES DE RECOMPENSAR
+                        # CAMBIO: Llamar a recompensar ANTES de subir el nivel para que detecte nivel 5
                         self.recompensar_boss()
+                        self.nivel += 1
                         break
                     else:
-                        # BOSS periódico normal 
-                        if self.boss_instancia:  # Verificar que boss_instancia no sea None
+                        # BOSS periodico normal: dar XP directo y avanzar
+                        if self.boss_instancia:
                             self.boss_instancia.kill()
                         self.boss_instancia = None
                         xp_boss = (FILAS_MONSTRUOS * COLUMNAS_MONSTRUOS * XP_POR_ENEMIGO) // 2
-                        self.xp_pendiente_boss = xp_boss
-                        self.cambiar_estado(ESTADO_SELECCION_RECOMPENSA_BOSS)
+                        if self.mago.ganar_xp(xp_boss):
+                            self.cambiar_estado(ESTADO_SELECCION_MEJORA)
+                            if self.snd_nivel and not self.juego_silenciado: self.snd_nivel.play()
+                        else:
+                            self.nivel += 1; self.cambiar_estado(ESTADO_TRANSICION)
+                        if self.mago.vidas < self.mago.max_vidas: self.mago.vidas += 1
             
         if self.boss_instancia and not self.boss_instancia.alive():
             [c.kill() for c in self.charcos] # Limpiar charcos al morir boss
@@ -855,10 +834,12 @@ class Juego:
             if self.nivel == 10 and isinstance(self.boss_instancia, BossSNAKE):
                 self.boss_instancia = None
                 self.gestor_datos.agregar_cristales(100)  # Recompensa de 100 gemas
+                # DESBLOQUEO DE PERSONAJES
+                self.gestor_datos.datos["unlocked_loco"] = True
                 # Desbloquear snake solo si es modo difícil
                 if self.dificultad == MODO_DIFICIL:
                     self.gestor_datos.datos["unlocked_snake"] = True
-                    self.gestor_datos.guardar()
+                self.gestor_datos.guardar()
                 self.clicks_victoria = 0  # Contador de clicks para volver al menú
                 self.cambiar_estado(ESTADO_VICTORIA_FINAL)
             else:
@@ -876,7 +857,6 @@ class Juego:
                 p.kill() # Proyectiles normales se destruyen
             for b in barreras_golpeadas: b.recibir_danio()
 
-        # COLISIÓN ESCUDO ESPECIAL (MAGO Nivel 5)
         if self.mago.escudo_especial and self.mago.escudo_especial.activo:
             impactos_escudo = pygame.sprite.spritecollide(self.mago.escudo_especial, self.proyectiles_enemigos, False)
             for p in impactos_escudo:
@@ -884,7 +864,7 @@ class Juego:
                 danio_rebotado = DANIO_BASE_MAGO * self.mago.stats["danio_multi"] * 2
                 p.es_enemigo = False
                 p.danio = danio_rebotado
-                p.vx *= -1
+                p.vy = -abs(p.vy) # Asegurar que vaya hacia arriba
                 p.color = CIAN_MAGIA
                 p.es_explosivo = True
                 
@@ -893,12 +873,16 @@ class Juego:
                 pygame.draw.circle(p.image, CIAN_MAGIA, (10+3, 10+3), 10)
                 pygame.draw.circle(p.image, BLANCO, (10+3, 10+3), 10//3)
                 p.rect = p.image.get_rect(center=p.rect.center)
+
+                # SINERGIA: Añadir al grupo de proyectiles del mago para dañar enemigos
+                self.proyectiles_mago.add(p)
+                self.proyectiles_enemigos.remove(p)
                 
-                # Desactivar escudo por 10 segundos
+                # Desactivar escudo por 30 segundos
                 self.mago.escudo_especial.desactivar()
         
         # IMPACTO PROYECTIL ENEMIGO -> JUGADOR
-        col_list = pygame.sprite.spritecollide(self.mago, self.proyectiles_enemigos, True)
+        col_list = pygame.sprite.spritecollide(self.mago, self.proyectiles_enemigos, True, collided=collided_hitbox)
         for p in col_list:
              # Spawnear charco si impacta al jugador 
              if getattr(p, 'es_bomba', False) and self.boss_instancia: 
@@ -931,10 +915,12 @@ class Juego:
                 fin_x = s.x + math.cos(rad) * 1000
                 fin_y = s.y + math.sin(rad) * 1000
                 
-                # Chequear si la linea del laser cruza el rectangulo del mago
-                clip = self.mago.rect.clipline(s.x, s.y, fin_x, fin_y)
+                # Chequear si la linea del laser cruza el rectangulo del mago (usando hitbox si existe)
+                mago_rect = getattr(self.mago, 'hitbox', self.mago.rect)
+                clip = mago_rect.clipline(s.x, s.y, fin_x, fin_y)
                 if clip:
-                    self.mago.recibir_danio()
+                    if self.mago.recibir_danio():
+                        self.screen_shake = 10; self.flash_alpha = 150
                 
                 # Chequear barreras
                 for b in self.barreras:
@@ -944,7 +930,7 @@ class Juego:
         
         # COLISIÓN BOSS SNAKE EMBISTIENDO
         if self.boss_instancia and hasattr(self.boss_instancia, 'embestiendo') and self.boss_instancia.embestiendo:
-            if pygame.sprite.collide_rect(self.mago, self.boss_instancia):
+            if collided_hitbox(self.mago, self.boss_instancia):
                 if self.mago.recibir_danio():
                     self.screen_shake = 15; self.flash_alpha = 200
                     self.explosion_efecto(self.mago.rect.centerx, self.mago.rect.top, ROJO_VIDA)
@@ -959,7 +945,7 @@ class Juego:
                 self.explosion_efecto(p.rect.centerx, p.rect.bottom, MORADO_CARGADO)
 
         # INTERACCION CON CHARCOS
-        charcos_pisados = pygame.sprite.spritecollide(self.mago, self.charcos, False)
+        charcos_pisados = pygame.sprite.spritecollide(self.mago, self.charcos, False, collided=collided_hitbox)
         for c in charcos_pisados:
             if c.tipo == "hielo":
                 self.mago.resbalando = True # Activa fisica de hielo
@@ -969,12 +955,18 @@ class Juego:
                 now = pygame.time.get_ticks()
                 if not hasattr(self.mago, "ultimo_veneno"): self.mago.ultimo_veneno = 0
                 if now - self.mago.ultimo_veneno > TICK_CHARCO_VENENO:
-                    self.mago.recibir_danio() 
-                    self.mago.ultimo_veneno = now
+                    if self.mago.recibir_danio():
+                        self.screen_shake = 10; self.flash_alpha = 150
+                        self.mago.ultimo_veneno = now
             elif c.tipo == "fuego":
-                 self.mago.recibir_danio()
+                 now = pygame.time.get_ticks()
+                 if not hasattr(self.mago, "ultimo_fuego"): self.mago.ultimo_fuego = 0
+                 if now - self.mago.ultimo_fuego > 1000: # Tick cada segundo
+                     if self.mago.recibir_danio():
+                         self.screen_shake = 10; self.flash_alpha = 150
+                         self.mago.ultimo_fuego = now
 
-        for p in pygame.sprite.spritecollide(self.mago, self.powerups, True): 
+        for p in pygame.sprite.spritecollide(self.mago, self.powerups, True, collided=collided_hitbox): 
             self.tiempo_sin_powerup = 0
             if p.tipo == "reparar_barreras":
                 self.crear_barreras()
@@ -982,7 +974,7 @@ class Juego:
             else:
                 self.mago.aplicar_powerup(p.tipo)
                 if self.snd_powerup and not self.juego_silenciado: self.snd_powerup.play()
-        for c in pygame.sprite.spritecollide(self.mago, self.corazones, True):
+        for c in pygame.sprite.spritecollide(self.mago, self.corazones, True, collided=collided_hitbox):
             if self.mago.vidas < self.mago.max_vidas: self.mago.vidas += 1
             if self.snd_powerup and not self.juego_silenciado: self.snd_powerup.play()
 
@@ -1063,6 +1055,8 @@ class Juego:
         
         # Potenciar opciones ya tomadas (más probabilidad)
         potenciados = []
+        # Ids con peso extra (aparecen mas seguido)
+        ids_peso_extra = {"hielo_perma", "rebote", "perforante"}
         for opcion in posibles:
             id_op = opcion["id"]
             veces = self.mago.mejoras_contador.get(id_op, 0)
@@ -1072,9 +1066,24 @@ class Juego:
                     potenciados.append(opcion.copy())
             else:
                 potenciados.append(opcion)
-        
-        # Seleccionar 3 opciones (con mayor peso para las ya tomadas)
-        self.opciones_mejora_actuales = random.sample(potenciados, min(3, len(potenciados)))
+            
+            # Peso extra para power-ups permanentes clave
+            if id_op in ids_peso_extra:
+                for _ in range(2):
+                    potenciados.append(opcion.copy())
+
+        # Seleccionar 3 opciones unicas basándose en pesos (sin repetir)
+        self.opciones_mejora_actuales = []
+        # Clonamos la lista para no vaciar la original
+        pool_temporal = list(potenciados)
+        while len(self.opciones_mejora_actuales) < min(3, len(posibles)):
+            if not pool_temporal: break
+            nueva = random.choice(pool_temporal)
+            # Agregar si no está ya seleccionada
+            if not any(o["id"] == nueva["id"] for o in self.opciones_mejora_actuales):
+                self.opciones_mejora_actuales.append(nueva)
+            # Eliminar todas las copias de este ID para no volverlo a elegir
+            pool_temporal = [p for p in pool_temporal if p["id"] != nueva["id"]]
     
     def aplicar_mejora_permanente(self, indice):
         if indice < 1 or indice > len(self.opciones_mejora_actuales): return
@@ -1085,14 +1094,17 @@ class Juego:
         
         if tipo == "vida": self.mago.max_vidas += MEJORA_VIDA_MAXIMA; self.mago.vidas = self.mago.max_vidas
         elif tipo == "danio": 
-            val = 0.1 if self.mago.tipo == "el_loco" else 0.2
-            #Bonus por mejora repetida: +5% adicional por cada repetición
-            bonus = self.mago.mejoras_contador["danio"] * 0.05
-            self.mago.stats["danio_multi"] += val + bonus
+            if self.mago.tipo == "el_loco":
+                # El Loco: +0.5 de daño fijo (0.05 * 10)
+                self.mago.stats["danio_multi"] += 0.05
+            else:
+                # Otros: +20% de daño total
+                self.mago.stats["danio_multi"] *= 1.20
         elif tipo == "vel_atk": 
-            #Bonus por mejora repetida: +2% adicional por cada repetición
+            # Bonus por mejora repetida: +2% adicional por cada repetición
             bonus = self.mago.mejoras_contador["vel_atk"] * 0.02
-            self.mago.stats["velocidad_ataque_multi"] += 0.15 + bonus
+            # Mejora proporcional: cada nivel aumenta la velocidad de ataque base en un 15%
+            self.mago.stats["velocidad_ataque_multi"] *= (1.15 + bonus)
         elif tipo == "multidisparo": 
             self.mago.stats["proyectiles_extra"] += 1
             #Bonus por mejora repetida: +1 proyectil extra cada 3 picked
@@ -1405,6 +1417,9 @@ class Juego:
             txt_borrar = "BORRAR DATOS" if not self.confirmando_borrado else "¿SEGURO?"
             self.dibujar_texto(txt_borrar, self.fuente_sm, BLANCO, self.rect_btn_borrar.centerx, self.rect_btn_borrar.centery)
 
+            # VERSION (v1.0.1)
+            self.dibujar_texto(f"v{VERSION}", self.fuente_xs, GRIS_BOTON, 45, 20)
+
         elif self.estado == ESTADO_TIENDA:
             self.dibujar_tienda()
         
@@ -1423,12 +1438,12 @@ class Juego:
                 s = d["stats_base"]
                 unlocked = True
                 if key == "el_loco": 
-                    unlocked = self.gestor_datos.datos.get("unlocked_loco", False) or (DEBUG_MODE and DEBUG_ALL_UNLOCKED)
+                    unlocked = self.gestor_datos.datos.get("unlocked_loco", False) or (settings.DEBUG_MODE and settings.DEBUG_ALL_UNLOCKED)
                 elif key == "snake":
-                    unlocked = self.gestor_datos.datos.get("unlocked_snake", False) or (DEBUG_MODE and DEBUG_ALL_UNLOCKED)
+                    unlocked = self.gestor_datos.datos.get("unlocked_snake", False) or (settings.DEBUG_MODE and settings.DEBUG_ALL_UNLOCKED)
                 
                 # En modo debug, mostrar indicador
-                if DEBUG_MODE and DEBUG_ALL_UNLOCKED:
+                if settings.DEBUG_MODE and settings.DEBUG_ALL_UNLOCKED:
                     unlocked = True
                 
                 if not unlocked:
@@ -1610,10 +1625,10 @@ class Juego:
         self.pantalla.blit(s, (0,0))
 
         # --- MODO DEBUG INDICADOR ---
-        if DEBUG_MODE:
+        if settings.DEBUG_MODE:
             debug_text = "DEBUG MODE"
-            if DEBUG_GOD_MODE: debug_text += " [GOD]"
-            if DEBUG_INFINITE_CHARGES: debug_text += " [INF]"
+            if settings.DEBUG_GOD_MODE: debug_text += " [GOD]"
+            if settings.DEBUG_INFINITE_CHARGES: debug_text += " [INF]"
             self.dibujar_texto(debug_text, self.fuente_sm, (255, 0, 255), ANCHO//2, 5)
 
         # --- SECCION IZQUIERDA: NIVEL y GEMAS ---
@@ -2009,6 +2024,10 @@ class Juego:
                         elif ev.key == pygame.K_2: self.aplicar_recompensa_boss(1)
                         elif ev.key == pygame.K_3: self.aplicar_recompensa_boss(2)
                         self.cambiar_estado(ESTADO_TRANSICION)
+                    elif self.estado == ESTADO_SELECCION_MEJORA:
+                        if ev.key == pygame.K_1: self.aplicar_mejora_permanente(1)
+                        elif ev.key == pygame.K_2: self.aplicar_mejora_permanente(2)
+                        elif ev.key == pygame.K_3: self.aplicar_mejora_permanente(3)
                     elif self.estado == ESTADO_DEBUG_MENU:
                         if ev.key == pygame.K_F12: self.cambiar_estado(ESTADO_JUGANDO)
             if self.estado == ESTADO_JUGANDO and self.controles_tactiles_activados:
