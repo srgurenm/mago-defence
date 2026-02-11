@@ -376,7 +376,7 @@ TICK_CHARCO_VENENO = 1000
 # Escalado de vida mejorado
 PUNTOS_POR_FILA = {0: 10, 1: 30, 2: 60, 3: 150}
 HP_POR_FILA = {0: 15, 1: 30, 2: 45, 3: 55} 
-MULT_VIDA_POR_NIVEL = 0.15 # 10% de vida extra por nivel (escalado porcentual)
+MULT_VIDA_POR_NIVEL = 0.15 # 10% de vida extra por nivel 
 
 COLORES_POR_FILA = {0: (50, 200, 50), 1: (200, 200, 50), 2: (200, 100, 50), 3: (200, 50, 50)}
 
@@ -387,7 +387,7 @@ CHANCE_DISPARO_POR_TIPO = {
     TIPO_ENEMIGO_RAPIDO: 1.5,
     TIPO_ENEMIGO_TANQUE: 0.5,
     TIPO_ENEMIGO_ELITE: 2.9,
-    TIPO_ENEMIGO_TESORO: 6.0
+    TIPO_ENEMIGO_TESORO: 9.5
 }
 VEL_MONSTRUO_BASE_X = 0.2 
 DISTANCIA_DESCENSO_BASE = 4
@@ -400,7 +400,7 @@ MULT_DISPARO_DIFICIL = 2.9
 
 # --- BOSSES ---
 FRECUENCIA_BOSS = 5 
-HP_BOSS_BASE = 750 
+HP_BOSS_BASE = 700 
 VEL_BOSS_X_MAX = 4.0
 VEL_BOSS_Y_MAX = 2.0
 LIMITE_INFERIOR_BOSS = 300 
@@ -417,14 +417,14 @@ BOSS_TIPO_TOXICO = 2
 BOSS_TIPO_FUEGO = 3
 BOSS_TIPO_SNAKE = 4
 
-HP_BOSS_SNAKE = 4500
+HP_BOSS_SNAKE = 4200
 BOSS_FUEGO_COLOR = (255, 69, 0)
 PATH_BOSS_ATAQUE = "assets/boss_ataque.png"
 PATH_BOSS_MUERTE = "assets/boss_muerte.png"
 
 # --- EFECTOS DE ESTADO ---
-DURACION_CONGELACION_NORMAL = 2000
-DURACION_CONGELACION_BOSS = 600
+DURACION_CONGELACION_NORMAL = 2200
+DURACION_CONGELACION_BOSS = 660
 
 # --- POWER-UPS ---
 PROB_CORAZON = 0.0008 
@@ -432,16 +432,16 @@ CANTIDAD_GRUPOS_BARRERAS = 3
 BARRERA_VIDA_MAX = 10      
 BARRERA_ANCHO = 40         
 BARRERA_ALTO = 9
-PROB_POWERUP_CIELO = 0.0002 
+PROB_POWERUP_CIELO = 0.0001 
 PROB_POWERUP_BASE = 0.12 
 PROB_POWERUP_ENDGAME = 0.30
-PROB_POWERUP_RAYO = 0.03 
+PROB_POWERUP_RAYO = 0.02
 
-TIEMPO_SIN_POWERUP_MS_BONUS = 10000
-BONUS_PROB_POR_SEGUNDO = 0.005
-BONUS_PROB_MAXIMO = 0.25
+TIEMPO_SIN_POWERUP_MS_BONUS = 15000
+BONUS_PROB_POR_SEGUNDO = 0.004
+BONUS_PROB_MAXIMO = 0.20
 BONUS_PROB_BOSS = 2.0
-INTERVALO_MINIMO_POWERUPS = 500
+INTERVALO_MINIMO_POWERUPS = 800
 
 COLORES_PU = {
     "cadencia": (0, 255, 255), "arco": (255, 0, 255), "disparo_doble": (0, 255, 0),
@@ -450,12 +450,12 @@ COLORES_PU = {
     "orbital": ROJO_ORBITAL, "homing": AZUL_HOMING
 }
 POWERUPS_STATS = {
-    "cadencia": {"duracion": 8000}, "arco": {"cargas": 6}, "disparo_doble": {"cargas": 8},
-    "disparo_triple": {"cargas": 5}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9000},
-    "doble_danio": {"duracion": 9000},
+    "cadencia": {"duracion": 8000}, "arco": {"cargas": 5}, "disparo_doble": {"cargas": 8},
+    "disparo_triple": {"cargas": 4}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9500},
+    "doble_danio": {"duracion": 9500},
     "rayo": {"cargas": 2},
     "orbital": {"duracion": 15000},
-    "homing": {"cargas": 12}
+    "homing": {"cargas": 15}
 }
 
 UNLOCK_REQ_ORBITAL = 1
