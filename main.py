@@ -644,10 +644,26 @@ class Juego:
         elif nuevo_estado == ESTADO_SELECCION_RECOMPENSA_BOSS: self.generar_opciones_boss()
         elif nuevo_estado == ESTADO_GAMEOVER:
             self.gestor_datos.actualizar_highscore(self.puntuacion)
-            if self.mago.nivel_run >= 10:
-                if not self.gestor_datos.datos.get("unlocked_loco", False):
-                    self.gestor_datos.datos["unlocked_loco"] = True
-                    self.gestor_datos.guardar()
+            self.verificar_desbloqueos()
+        elif nuevo_estado == ESTADO_MENU:
+            self.verificar_desbloqueos()
+
+    def verificar_desbloqueos(self):
+        """Verifica y activa el desbloqueo de personajes según las condiciones."""
+        hubo_cambio = False
+        
+        # EL LOCO: Se desbloquea al llegar al nivel 10
+        # Chequeamos tanto el nivel de la oleada como el nivel de run del mago
+        if (self.nivel >= 10 or self.mago.nivel_run >= 10) and not self.gestor_datos.datos.get("unlocked_loco", False):
+            self.gestor_datos.datos["unlocked_loco"] = True
+            self.notificacion_powerup = "¡EL LOCO DESBLOQUEADO!"
+            self.tiempo_notificacion_powerup = pygame.time.get_ticks()
+            hubo_cambio = True
+
+        # SNAKE: Se desbloquea al vencer al boss final en difícil
+        # (Esto se maneja principalmente en la colisión del boss, pero protegemos aquí)
+        if hubo_cambio:
+            self.gestor_datos.guardar()
 
     def recompensar_boss(self):
         self.xp_pendiente_boss = (FILAS_MONSTRUOS * COLUMNAS_MONSTRUOS * XP_POR_ENEMIGO) // 2
@@ -898,7 +914,8 @@ class Juego:
                         self.gestor_datos.datos["unlocked_loco"] = True
                         if self.dificultad == MODO_DIFICIL:
                             self.gestor_datos.datos["unlocked_snake"] = True
-                            self.gestor_datos.guardar()
+                        self.gestor_datos.guardar()
+                        self.verificar_desbloqueos() # Notificaciones
                         self.clicks_victoria = 0
                         self.cambiar_estado(ESTADO_VICTORIA_FINAL)
                         break
@@ -1932,6 +1949,10 @@ class Juego:
                     if self.snd_nivel and not self.juego_silenciado: self.snd_nivel.play()
             for m in self.monstruos:
                 if m.rect.bottom >= self.mago.rect.top: self.cambiar_estado(ESTADO_GAMEOVER)
+            
+            # Verificar desbloqueos en tiempo real
+            if self.mago.nivel_run >= 10 or self.nivel >= 10:
+                self.verificar_desbloqueos()
         
         elif self.estado == ESTADO_TRANSICION:
             if pygame.time.get_ticks() - self.tiempo_estado_inicio > 2000:
