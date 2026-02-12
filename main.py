@@ -149,14 +149,15 @@ class GestorDatos:
         if self.es_web:
             try:
                 import js
-                from js import window, document, Blob, URL
+                from js import document, Blob, URL
                 
                 # Crear un blob con los datos
                 blob = Blob.new([data_str], { "type": "application/json" })
                 url = URL.createObjectURL(blob)
                 
-                # Crear un link temporal y simular click
+                # Crear un link temporal
                 a = document.createElement("a")
+                a.style.display = "none"
                 a.href = url
                 a.download = "save_data_rogue.json"
                 document.body.appendChild(a)
@@ -165,6 +166,7 @@ class GestorDatos:
                 # Limpiar
                 document.body.removeChild(a)
                 URL.revokeObjectURL(url)
+                print("Exportación web iniciada.")
             except Exception as e:
                 print(f"Error al exportar en web: {e}")
         else:
@@ -198,34 +200,50 @@ class GestorDatos:
         if self.es_web:
             try:
                 import js
-                from js import window, document, FileReader
+                from js import document, FileReader
+                from pyodide.ffi import create_proxy
                 
                 def on_load(event):
                     try:
-                        data = json.loads(event.target.result)
+                        res = event.target.result
+                        data = json.loads(res)
                         self._fusionar_datos(data)
                         self.guardar()
+                        print("Datos importados con éxito en web.")
                         if juego_callback:
                             juego_callback()
                     except Exception as e:
                         print(f"Error al procesar archivo importado: {e}")
 
-                # Crear input file invisible
-                file_input = document.createElement("input")
-                file_input.type = "file"
-                file_input.accept = ".json"
-                
+                # Proxies para Pyodide
+                on_load_proxy = create_proxy(on_load)
+
                 def on_change(event):
                     files = event.target.files
                     if files.length > 0:
                         reader = FileReader.new()
-                        reader.onload = on_load
+                        reader.onload = on_load_proxy
                         reader.readAsText(files.item(0))
+                    # Limpiar proxy de change después de activarse
+                    on_change_proxy.destroy()
+
+                on_change_proxy = create_proxy(on_change)
+
+                # Crear input file invisible
+                file_input = document.createElement("input")
+                file_input.type = "file"
+                file_input.accept = ".json"
+                file_input.style.display = "none"
+                document.body.appendChild(file_input)
                 
-                file_input.onchange = on_change
+                file_input.onchange = on_change_proxy
                 file_input.click()
+                
+                # Remover después de click para no ensuciar el DOM
+                # (El diálogo de archivos ya está abierto)
+                document.body.removeChild(file_input)
             except Exception as e:
-                print(f"Error al importar en web: {e}")
+                print(f"Error crítico al importar en web: {e}")
         else:
             try:
                 import tkinter as tk
