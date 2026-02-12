@@ -39,7 +39,9 @@ class GestorDatos:
                 "cazador": False,
                 "el_loco": False,
                 "snake": False
-            }
+            },
+            "vol_musica": VOLUMEN_MUSICA_DEFAULT,
+            "vol_sfx": VOLUMEN_SFX_DEFAULT
         }
         self.cargar()
 
@@ -74,10 +76,14 @@ class GestorDatos:
             else:
                 self.datos[k] = v
         
-        # Garantizar claves de desbloqueo
+        # Garantizar claves de desbloqueo y audio
         for key in ["unlocked_loco", "unlocked_snake"]:
             if key not in self.datos:
                 self.datos[key] = False
+        if "vol_musica" not in self.datos:
+            self.datos["vol_musica"] = VOLUMEN_MUSICA_DEFAULT
+        if "vol_sfx" not in self.datos:
+            self.datos["vol_sfx"] = VOLUMEN_SFX_DEFAULT
 
     def guardar(self):
         if self.es_web:
@@ -401,8 +407,19 @@ class Juego:
         # UI PAUSA
         self.rect_btn_reiniciar = pygame.Rect(ANCHO//2 - 100, ALTO//2 + 80, 200, 40) 
 
+        # UI CONFIG AUDIO
+        self.rect_btn_config_audio = pygame.Rect(ANCHO - 230, 75, 210, 45)
+        self.rect_btn_volver_audio = pygame.Rect(ANCHO//2 - 100, 480, 200, 45)
+        self.rect_audio_mus_minus = pygame.Rect(ANCHO//2 - 100, 200, 40, 40)
+        self.rect_audio_mus_plus = pygame.Rect(ANCHO//2 + 60, 200, 40, 40)
+        self.rect_audio_sfx_minus = pygame.Rect(ANCHO//2 - 100, 300, 40, 40)
+        self.rect_audio_sfx_plus = pygame.Rect(ANCHO//2 + 60, 300, 40, 40)
+
     def cargar_recursos(self):
         try:
+            vol_mus = self.gestor_datos.datos.get("vol_musica", VOLUMEN_MUSICA_DEFAULT)
+            vol_sfx = self.gestor_datos.datos.get("vol_sfx", VOLUMEN_SFX_DEFAULT)
+            
             r_disp = resolver_ruta(PATH_SND_DISPARO)
             if os.path.exists(r_disp): self.snd_disparo = pygame.mixer.Sound(r_disp)
             r_muer = resolver_ruta(PATH_SND_MUERTE)
@@ -411,19 +428,32 @@ class Juego:
             if os.path.exists(r_pow): self.snd_powerup = pygame.mixer.Sound(r_pow)
             r_niv = resolver_ruta(PATH_SND_NIVEL)
             if os.path.exists(r_niv): self.snd_nivel = pygame.mixer.Sound(r_niv)
+            
             for s in [self.snd_disparo, self.snd_muerte, self.snd_powerup, self.snd_nivel]:
-                if s: s.set_volume(0.25)
+                if s: s.set_volume(vol_sfx)
+                
             r_mus = resolver_ruta(PATH_MUSIC)
             if os.path.exists(r_mus):
                 pygame.mixer.music.load(r_mus)
-                pygame.mixer.music.set_volume(0.18)
+                pygame.mixer.music.set_volume(vol_mus if not self.juego_silenciado else 0)
         except: pass
+
+    def actualizar_volumenes(self):
+        """Aplica los volúmenes actuales del gestor de datos."""
+        vol_mus = self.gestor_datos.datos.get("vol_musica", VOLUMEN_MUSICA_DEFAULT)
+        vol_sfx = self.gestor_datos.datos.get("vol_sfx", VOLUMEN_SFX_DEFAULT)
+        
+        for s in [self.snd_disparo, self.snd_muerte, self.snd_powerup, self.snd_nivel]:
+            if s: s.set_volume(vol_sfx)
+            
+        if not self.juego_silenciado:
+            pygame.mixer.music.set_volume(vol_mus)
+        else:
+            pygame.mixer.music.set_volume(0)
 
     def alternar_mute(self):
         self.juego_silenciado = not self.juego_silenciado
-        vol = 0 if self.juego_silenciado else 1
-        try: pygame.mixer.music.set_volume(0.18 * vol)
-        except: pass
+        self.actualizar_volumenes()
 
     def abrir_enlace(self, url):
         if sys.platform == 'emscripten':
@@ -1367,6 +1397,34 @@ class Juego:
         pygame.draw.rect(self.pantalla, (255, 221, 0), self.rect_btn_donacion, border_radius=10)
         self.dibujar_texto("Buy me a coffee", self.fuente_md, (0, 0, 0), self.rect_btn_donacion.centerx, self.rect_btn_donacion.centery)
 
+    def dibujar_menu_audio(self):
+        overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 200))
+        self.pantalla.blit(overlay, (0,0))
+        
+        self.dibujar_texto("AJUSTES DE SONIDO", self.fuente_lg, AZUL_MAGO, ANCHO//2, 80)
+        
+        vol_mus = self.gestor_datos.datos.get("vol_musica", VOLUMEN_MUSICA_DEFAULT)
+        vol_sfx = self.gestor_datos.datos.get("vol_sfx", VOLUMEN_SFX_DEFAULT)
+        
+        # MUSICA
+        self.dibujar_texto(f"MUSICA: {int(vol_mus * 100)}%", self.fuente_md, BLANCO, ANCHO//2, 160)
+        pygame.draw.rect(self.pantalla, GRIS_BOTON, self.rect_audio_mus_minus, border_radius=5)
+        self.dibujar_texto("-", self.fuente_md, BLANCO, self.rect_audio_mus_minus.centerx, self.rect_audio_mus_minus.centery)
+        pygame.draw.rect(self.pantalla, GRIS_BOTON, self.rect_audio_mus_plus, border_radius=5)
+        self.dibujar_texto("+", self.fuente_md, BLANCO, self.rect_audio_mus_plus.centerx, self.rect_audio_mus_plus.centery)
+        
+        # SFX
+        self.dibujar_texto(f"EFECTOS (SFX): {int(vol_sfx * 100)}%", self.fuente_md, BLANCO, ANCHO//2, 260)
+        pygame.draw.rect(self.pantalla, GRIS_BOTON, self.rect_audio_sfx_minus, border_radius=5)
+        self.dibujar_texto("-", self.fuente_md, BLANCO, self.rect_audio_sfx_minus.centerx, self.rect_audio_sfx_minus.centery)
+        pygame.draw.rect(self.pantalla, GRIS_BOTON, self.rect_audio_sfx_plus, border_radius=5)
+        self.dibujar_texto("+", self.fuente_md, BLANCO, self.rect_audio_sfx_plus.centerx, self.rect_audio_sfx_plus.centery)
+        
+        # VOLVER
+        pygame.draw.rect(self.pantalla, ROJO_VIDA, self.rect_btn_volver_audio, border_radius=10)
+        self.dibujar_texto("VOLVER", self.fuente_md, BLANCO, self.rect_btn_volver_audio.centerx, self.rect_btn_volver_audio.centery)
+
     def dibujar_menu_debug(self):
         """Dibuja el menú de configuración de debug"""
         overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
@@ -1413,6 +1471,19 @@ class Juego:
         
         # Instrucciones
         self.dibujar_texto("Presiona F12 para abrir/cerrar este menú", self.fuente_sm, (200, 200, 200), ANCHO//2, ALTO - 30)
+
+    def _manejar_click_menu_audio(self, x, y):
+        cambio = False
+        if self.rect_audio_mus_minus.collidepoint(x, y):
+            self.gestor_datos.datos["vol_musica"] = max(0.0, self.gestor_datos.datos["vol_musica"] - 0.05); cambio = True
+        elif self.rect_audio_mus_plus.collidepoint(x, y):
+            self.gestor_datos.datos["vol_musica"] = min(1.0, self.gestor_datos.datos["vol_musica"] + 0.05); cambio = True
+        if self.rect_audio_sfx_minus.collidepoint(x, y):
+            self.gestor_datos.datos["vol_sfx"] = max(0.0, self.gestor_datos.datos["vol_sfx"] - 0.05); cambio = True
+        elif self.rect_audio_sfx_plus.collidepoint(x, y):
+            self.gestor_datos.datos["vol_sfx"] = min(1.0, self.gestor_datos.datos["vol_sfx"] + 0.05); cambio = True
+        if cambio: self.actualizar_volumenes(); self.gestor_datos.guardar()
+        if self.rect_btn_volver_audio.collidepoint(x, y): self.cambiar_estado(ESTADO_MENU)
 
     def _manejar_click_menu_debug(self, x, y):
         """Maneja los clicks en el menú de debug"""
@@ -1557,6 +1628,10 @@ class Juego:
             txt_borrar = "BORRAR DATOS" if not self.confirmando_borrado else "¿SEGURO?"
             self.dibujar_texto(txt_borrar, self.fuente_sm, BLANCO, self.rect_btn_borrar.centerx, self.rect_btn_borrar.centery)
 
+            # BOTON CONFIG AUDIO
+            pygame.draw.rect(self.pantalla, MORADO_OSCURO, self.rect_btn_config_audio, border_radius=10)
+            self.dibujar_texto("AJUSTES AUDIO", self.fuente_sm, BLANCO, self.rect_btn_config_audio.centerx, self.rect_btn_config_audio.centery)
+
             # BOTONES EXPORTAR / IMPORTAR
             pygame.draw.rect(self.pantalla, (60, 60, 80), self.rect_btn_exportar, border_radius=6)
             pygame.draw.rect(self.pantalla, (100, 100, 130), self.rect_btn_exportar, 2, border_radius=6)
@@ -1574,6 +1649,9 @@ class Juego:
         
         elif self.estado == ESTADO_DEBUG_MENU:
             self.dibujar_menu_debug()
+
+        elif self.estado == ESTADO_CONFIG_AUDIO:
+            self.dibujar_menu_audio()
 
         elif self.estado == ESTADO_SELECCION_PERSONAJE:
             overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA); overlay.fill((0, 0, 0, 220)); self.pantalla.blit(overlay, (0,0))
@@ -2048,6 +2126,9 @@ class Juego:
                              else: self.confirmando_borrado, self.timer_confirmacion_borrado = True, pygame.time.get_ticks()
                         if self.rect_btn_exportar.collidepoint(tx, ty): self.gestor_datos.exportar_save_json()
                         if self.rect_btn_importar.collidepoint(tx, ty): self.gestor_datos.importar_save_json(lambda: setattr(self, 'text_cache', {}))
+                        if self.rect_btn_config_audio.collidepoint(tx, ty): self.cambiar_estado(ESTADO_CONFIG_AUDIO)
+                    elif self.estado == ESTADO_CONFIG_AUDIO:
+                        self._manejar_click_menu_audio(tx, ty)
                     elif self.estado == ESTADO_SELECCION_PERSONAJE:
                           if self.rect_char_1.collidepoint(tx, ty): self.iniciar_partida("MAGO")
                           elif self.rect_char_2.collidepoint(tx, ty): self.iniciar_partida("piromante")
@@ -2110,6 +2191,9 @@ class Juego:
                             else: self.confirmando_borrado, self.timer_confirmacion_borrado = True, pygame.time.get_ticks()
                         elif self.rect_btn_exportar.collidepoint(m_pos): self.gestor_datos.exportar_save_json()
                         elif self.rect_btn_importar.collidepoint(m_pos): self.gestor_datos.importar_save_json(lambda: setattr(self, 'text_cache', {}))
+                        elif self.rect_btn_config_audio.collidepoint(m_pos): self.cambiar_estado(ESTADO_CONFIG_AUDIO)
+                    elif self.estado == ESTADO_CONFIG_AUDIO:
+                        self._manejar_click_menu_audio(m_pos[0], m_pos[1])
                     elif self.estado == ESTADO_SELECCION_PERSONAJE:
                          if self.rect_char_1.collidepoint(m_pos): self.iniciar_partida("MAGO")
                          elif self.rect_char_2.collidepoint(m_pos): self.iniciar_partida("piromante")
