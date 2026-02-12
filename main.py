@@ -297,6 +297,7 @@ class Juego:
         self.tiempo_notificacion_powerup = 0
 
         self.juego_silenciado = False
+        self.audio_contexto_iniciado = False
         self.puntuacion, self.nivel, self.corriendo = 0, 1, True
         self.dificultad = MODO_NORMAL
 
@@ -416,27 +417,46 @@ class Juego:
         self.rect_audio_sfx_plus = pygame.Rect(ANCHO//2 + 60, 300, 40, 40)
 
     def cargar_recursos(self):
+        print(f"Iniciando carga de recursos. Sistema: {sys.platform}")
         try:
             vol_mus = self.gestor_datos.datos.get("vol_musica", VOLUMEN_MUSICA_DEFAULT)
             vol_sfx = self.gestor_datos.datos.get("vol_sfx", VOLUMEN_SFX_DEFAULT)
             
-            r_disp = resolver_ruta(PATH_SND_DISPARO)
-            if os.path.exists(r_disp): self.snd_disparo = pygame.mixer.Sound(r_disp)
-            r_muer = resolver_ruta(PATH_SND_MUERTE)
-            if os.path.exists(r_muer): self.snd_muerte = pygame.mixer.Sound(r_muer)
-            r_pow = resolver_ruta(PATH_SND_POWERUP)
-            if os.path.exists(r_pow): self.snd_powerup = pygame.mixer.Sound(r_pow)
-            r_niv = resolver_ruta(PATH_SND_NIVEL)
-            if os.path.exists(r_niv): self.snd_nivel = pygame.mixer.Sound(r_niv)
+            # SFX
+            sfx_files = [
+                (PATH_SND_DISPARO, 'snd_disparo'),
+                (PATH_SND_MUERTE, 'snd_muerte'),
+                (PATH_SND_POWERUP, 'snd_powerup'),
+                (PATH_SND_NIVEL, 'snd_nivel')
+            ]
             
-            for s in [self.snd_disparo, self.snd_muerte, self.snd_powerup, self.snd_nivel]:
-                if s: s.set_volume(vol_sfx)
-                
+            for path, attr in sfx_files:
+                r_path = resolver_ruta(path)
+                if os.path.exists(r_path):
+                    try:
+                        setattr(self, attr, pygame.mixer.Sound(r_path))
+                        sound = getattr(self, attr)
+                        if sound: sound.set_volume(vol_sfx)
+                        print(f"Sonido cargado: {path}")
+                    except Exception as e:
+                        print(f"Error cargando {path}: {e}")
+                else:
+                    print(f"Archivo no encontrado: {r_path}")
+
+            # Música
             r_mus = resolver_ruta(PATH_MUSIC)
             if os.path.exists(r_mus):
-                pygame.mixer.music.load(r_mus)
-                pygame.mixer.music.set_volume(vol_mus if not self.juego_silenciado else 0)
-        except: pass
+                try:
+                    pygame.mixer.music.load(r_mus)
+                    pygame.mixer.music.set_volume(vol_mus if not self.juego_silenciado else 0)
+                    print(f"Música cargada correctamente: {r_mus}")
+                except Exception as e:
+                    print(f"Error cargando música: {e}")
+            else:
+                print(f"Archivo de música no encontrado: {r_mus}")
+                
+        except Exception as e:
+            print(f"Error general en cargar_recursos: {e}")
 
     def actualizar_volumenes(self):
         """Aplica los volúmenes actuales del gestor de datos."""
@@ -447,13 +467,43 @@ class Juego:
             if s: s.set_volume(vol_sfx)
             
         if not self.juego_silenciado:
-            pygame.mixer.music.set_volume(vol_mus)
+            try: pygame.mixer.music.set_volume(vol_mus)
+            except: pass
         else:
-            pygame.mixer.music.set_volume(0)
+            try: pygame.mixer.music.set_volume(0)
+            except: pass
 
     def alternar_mute(self):
         self.juego_silenciado = not self.juego_silenciado
-        self.actualizar_volumenes()
+        if self.juego_silenciado:
+             pygame.mixer.music.set_volume(0)
+             for s in [self.snd_disparo, self.snd_muerte, self.snd_powerup, self.snd_nivel]:
+                 if s: s.set_volume(0)
+        else:
+             self.actualizar_volumenes()
+
+    def iniciar_audio_navegador(self):
+        """Fuerza la activación del audio tras la primera interacción."""
+        if self.audio_contexto_iniciado: return
+        print("Intentando activar audio web...")
+        try:
+            if sys.platform == 'emscripten':
+                import js
+                # Intentar resumir el contexto de audio via JS directamente
+                js.window.eval("if(window.AudioContext) { const ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); }")
+            
+            # Cargar y reproducir
+            self.cargar_recursos()
+            if not self.juego_silenciado:
+                try:
+                    pygame.mixer.music.play(-1)
+                    print("Música iniciada tras interacción.")
+                except Exception as e:
+                    print(f"Error al reproducir música inicial: {e}")
+            
+            self.audio_contexto_iniciado = True
+        except Exception as e:
+            print(f"Fallo crítico en iniciar_audio_navegador: {e}")
 
     def abrir_enlace(self, url):
         if sys.platform == 'emscripten':
@@ -2112,6 +2162,12 @@ class Juego:
                 self.tiempo_sin_powerup += self.reloj.get_time()
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT: self.corriendo = False
+                
+                # USER INTERACTION TRIGGER FOR WEB AUDIO
+                if ev.type in [pygame.FINGERDOWN, pygame.MOUSEBUTTONDOWN]:
+                    if not self.audio_contexto_iniciado:
+                        self.iniciar_audio_navegador()
+                
                 if ev.type == pygame.FINGERDOWN:
                     tx, ty = ev.x * ANCHO, ev.y * ALTO; self.toques_activos[ev.finger_id] = (tx, ty)
                     if self.rect_btn_mute.collidepoint(tx, ty): self.alternar_mute()
