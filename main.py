@@ -144,6 +144,97 @@ class GestorDatos:
             self.datos["high_score"] = score
             self.guardar()
 
+    def exportar_save_json(self):
+        """Exporta los datos actuales a un archivo JSON."""
+        data_str = json.dumps(self.datos, indent=4)
+        if self.es_web:
+            try:
+                import js
+                from js import window, document, Blob, URL
+                
+                # Crear un blob con los datos
+                blob = Blob.new([data_str], { "type": "application/json" })
+                url = URL.createObjectURL(blob)
+                
+                # Crear un link temporal y simular click
+                a = document.createElement("a")
+                a.href = url
+                a.download = "save_data_rogue.json"
+                document.body.appendChild(a)
+                a.click()
+                
+                # Limpiar
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+            except Exception as e:
+                print(f"Error al exportar en web: {e}")
+        else:
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                ruta = filedialog.asksaveasfilename(defaultextension=".json", initialfile="save_data_rogue.json", title="Exportar Partida")
+                root.destroy()
+                if ruta:
+                    with open(ruta, 'w') as f:
+                        f.write(data_str)
+            except:
+                # Fallback simple si tkinter falla
+                with open("export_save_data.json", 'w') as f:
+                    f.write(data_str)
+
+    def importar_save_json(self, juego_callback=None):
+        """Importa datos desde un archivo JSON."""
+        if self.es_web:
+            try:
+                import js
+                from js import window, document, FileReader
+                
+                def on_load(event):
+                    try:
+                        data = json.loads(event.target.result)
+                        self._fusionar_datos(data)
+                        self.guardar()
+                        if juego_callback:
+                            juego_callback()
+                    except Exception as e:
+                        print(f"Error al procesar archivo importado: {e}")
+
+                # Crear input file invisible
+                file_input = document.createElement("input")
+                file_input.type = "file"
+                file_input.accept = ".json"
+                
+                def on_change(event):
+                    files = event.target.files
+                    if files.length > 0:
+                        reader = FileReader.new()
+                        reader.onload = on_load
+                        reader.readAsText(files.item(0))
+                
+                file_input.onchange = on_change
+                file_input.click()
+            except Exception as e:
+                print(f"Error al importar en web: {e}")
+        else:
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                ruta = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")], title="Importar Partida")
+                root.destroy()
+                if ruta and os.path.exists(ruta):
+                    with open(ruta, 'r') as f:
+                        data = json.load(f)
+                        self._fusionar_datos(data)
+                        self.guardar()
+                        if juego_callback:
+                            juego_callback()
+            except:
+                pass
+
 class Juego:
     def __init__(self):
         pygame.init()
@@ -229,6 +320,11 @@ class Juego:
         self.rect_tienda_item_2 = pygame.Rect(ANCHO//2 - 80, 120, 160, 180)
         self.rect_tienda_item_3 = pygame.Rect(ANCHO//2 + 90, 120, 160, 180)
         self.rect_btn_volver_tienda = pygame.Rect(ANCHO//2 - 100, ALTO - 60, 200, 40)
+        
+        # Botones de Exportar/Importar en Menú Principal
+        btn_w_si = 130
+        self.rect_btn_exportar = pygame.Rect(10, 50, btn_w_si, 30)
+        self.rect_btn_importar = pygame.Rect(10, 90, btn_w_si, 30)
         
         # Botones del menú DEBUG
         btn_w, btn_h = 250, 40
@@ -1417,6 +1513,15 @@ class Juego:
             txt_borrar = "BORRAR DATOS" if not self.confirmando_borrado else "¿SEGURO?"
             self.dibujar_texto(txt_borrar, self.fuente_sm, BLANCO, self.rect_btn_borrar.centerx, self.rect_btn_borrar.centery)
 
+            # BOTONES EXPORTAR / IMPORTAR
+            pygame.draw.rect(self.pantalla, (60, 60, 80), self.rect_btn_exportar, border_radius=6)
+            pygame.draw.rect(self.pantalla, (100, 100, 130), self.rect_btn_exportar, 2, border_radius=6)
+            self.dibujar_texto("EXPORTAR", self.fuente_xs, BLANCO, self.rect_btn_exportar.centerx, self.rect_btn_exportar.centery)
+            
+            pygame.draw.rect(self.pantalla, (60, 60, 80), self.rect_btn_importar, border_radius=6)
+            pygame.draw.rect(self.pantalla, (100, 100, 130), self.rect_btn_importar, 2, border_radius=6)
+            self.dibujar_texto("IMPORTAR", self.fuente_xs, BLANCO, self.rect_btn_importar.centerx, self.rect_btn_importar.centery)
+
             # VERSION (v1.0.1)
             self.dibujar_texto(f"v{VERSION}", self.fuente_xs, GRIS_BOTON, 45, 20)
 
@@ -1856,6 +1961,8 @@ class Juego:
                         if self.rect_btn_borrar.collidepoint(tx, ty):
                              if self.confirmando_borrado: self.gestor_datos.reiniciar_datos(); self.confirmando_borrado = False
                              else: self.confirmando_borrado, self.timer_confirmacion_borrado = True, pygame.time.get_ticks()
+                        if self.rect_btn_exportar.collidepoint(tx, ty): self.gestor_datos.exportar_save_json()
+                        if self.rect_btn_importar.collidepoint(tx, ty): self.gestor_datos.importar_save_json(lambda: setattr(self, 'text_cache', {}))
                     elif self.estado == ESTADO_SELECCION_PERSONAJE:
                           if self.rect_char_1.collidepoint(tx, ty): self.iniciar_partida("MAGO")
                           elif self.rect_char_2.collidepoint(tx, ty): self.iniciar_partida("piromante")
@@ -1916,6 +2023,8 @@ class Juego:
                         elif self.rect_btn_borrar.collidepoint(m_pos):
                             if self.confirmando_borrado: self.gestor_datos.reiniciar_datos(); self.confirmando_borrado = False
                             else: self.confirmando_borrado, self.timer_confirmacion_borrado = True, pygame.time.get_ticks()
+                        elif self.rect_btn_exportar.collidepoint(m_pos): self.gestor_datos.exportar_save_json()
+                        elif self.rect_btn_importar.collidepoint(m_pos): self.gestor_datos.importar_save_json(lambda: setattr(self, 'text_cache', {}))
                     elif self.estado == ESTADO_SELECCION_PERSONAJE:
                          if self.rect_char_1.collidepoint(m_pos): self.iniciar_partida("MAGO")
                          elif self.rect_char_2.collidepoint(m_pos): self.iniciar_partida("piromante")

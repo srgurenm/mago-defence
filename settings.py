@@ -157,7 +157,7 @@ CONFIG_PERSONAJES = {
         
         # CRÍTICO
         "chance_critico": 0.05,
-        "danio_critico": 2.0,
+        "danio_critico": 1.5,
         
         # ESPECIAL - Quemadura explosiva
         "habilidad_especial": "explosion_quemadura",
@@ -282,8 +282,8 @@ CONFIG_PERSONAJES = {
         "dash_cooldown_ms": 1200,
         
         # CRÍTICO
-        "chance_critico": 0.05,
-        "danio_critico": 1.5,
+        "chance_critico": 0.01,
+        "danio_critico": 1.25,
         
         # ESPECIAL
         "habilidad_especial": None,
@@ -344,8 +344,8 @@ MAX_VIDAS_BASE = 3
 # --- META-PROGRESIÓN ---
 FACTOR_COSTO_TIENDA = 1.6 
 PRECIOS_TIENDA = {
-    "vida_base": {"base": 100, "max": 10, "nombre": "VIDA"},
-    "danio_base": {"base": 100, "max": 20, "nombre": "Daño"},
+    "vida_base": {"base": 150, "max": 3, "nombre": "VIDA"},
+    "danio_base": {"base": 100, "max": 10, "nombre": "Daño"},
     "critico": {"base": 200, "max": 10, "nombre": "%Critico"},
 }
 
@@ -454,7 +454,7 @@ POWERUPS_STATS = {
     "disparo_triple": {"cargas": 4}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9500},
     "doble_danio": {"duracion": 9500},
     "rayo": {"cargas": 2},
-    "orbital": {"duracion": 15000},
+    "orbital": {"duracion": 11000},
     "homing": {"cargas": 15}
 }
 
