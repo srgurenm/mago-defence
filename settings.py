@@ -83,10 +83,10 @@ COLOR_NIEBLA_BRUMA = (200, 220, 230)
 
 # --- BALANCEO ROGUELIKE ---
 XP_POR_ENEMIGO = 1
-XP_BASE_REQUERIDA = 14 
+XP_BASE_REQUERIDA = 15
 XP_FACTOR_ESCALADO = 1.50 
 
-ESCALADO_CADENCIA_POR_NIVEL = 0.98 
+ESCALADO_CADENCIA_POR_NIVEL = 0.99 
 VELOCIDAD_DASH = 18
 DURACION_DASH = 150 
 
@@ -104,14 +104,14 @@ CONFIG_PERSONAJES = {
         "danio_escalado_por_nivel": 0.8,
         
         # ATAQUE
-        "cadencia_base_ms": 400,
+        "cadencia_base_ms": 450,
         "cadencia_escalado": 0.98,
         "velocidad_proyectil": 9.0,
         "proyectiles_extra": 0,
         "dispersion_angulo": 10,
         
         # MOVIMIENTO
-        "velocidad_movimiento": 6.0,
+        "velocidad_movimiento": 5.0,
         "dash_velocidad": 18,
         "dash_duracion_ms": 150,
         "dash_cooldown_ms": 1200,
@@ -136,18 +136,18 @@ CONFIG_PERSONAJES = {
     
     "piromante": {
         # STATS BASE
-        "vida_inicial": 4,
+        "vida_inicial": 3,
         "vida_maxima": 4,
-        "danio_base": 20,
+        "danio_base": 15,
         "danio_multi": 1.5,
         "danio_escalado_por_nivel": 0.6,
         
         # ATAQUE
         "cadencia_base_ms": 1200,
         "cadencia_escalado": 0.90,
-        "velocidad_proyectil": 8.0,
+        "velocidad_proyectil": 5.0,
         "proyectiles_extra": 0,
-        "dispersion_angulo": 15,
+        "dispersion_angulo": 35,
         
         # MOVIMIENTO
         "velocidad_movimiento": 4.5,
@@ -186,7 +186,7 @@ CONFIG_PERSONAJES = {
         # ATAQUE
         "cadencia_base_ms": 750,
         "cadencia_escalado": 0.94,
-        "velocidad_proyectil": 10.0,
+        "velocidad_proyectil": 12.0,
         "proyectiles_extra": 1,
         "dispersion_angulo": 8,
         
@@ -197,7 +197,7 @@ CONFIG_PERSONAJES = {
         "dash_cooldown_ms": 1000,
         
         # CRÍTICO 
-        "chance_critico": 0.10,
+        "chance_critico": 0.15,
         "danio_critico": 2.0,
         
         # ESPECIAL
@@ -230,7 +230,7 @@ CONFIG_PERSONAJES = {
         "dispersion_angulo": 20,
         
         # MOVIMIENTO
-        "velocidad_movimiento": 7.5,
+        "velocidad_movimiento": 7.0,
         "dash_velocidad": 22,
         "dash_duracion_ms": 150,
         "dash_cooldown_ms": 800,
@@ -262,7 +262,7 @@ CONFIG_PERSONAJES = {
         "danio_escalado_por_nivel": 0.05,
         
         # ATAQUE - Sistema de carga (disparo único)
-        "cadencia_base_ms": 800,
+        "cadencia_base_ms": 80,
         "cadencia_escalado": 0.98,
         "velocidad_proyectil": 2.0,
         "proyectiles_extra": 0,
@@ -373,10 +373,10 @@ DURACION_RALENTIZADO = 3000
 DURACION_CHARCO = 5000
 TICK_CHARCO_VENENO = 1000
 
-# Escalado de vida mejorado
+# Escalado de vida 
 PUNTOS_POR_FILA = {0: 10, 1: 30, 2: 60, 3: 150}
 HP_POR_FILA = {0: 15, 1: 30, 2: 45, 3: 55} 
-MULT_VIDA_POR_NIVEL = 0.15 # 10% de vida extra por nivel (escalado porcentual)
+MULT_VIDA_POR_NIVEL = 0.15  
 
 COLORES_POR_FILA = {0: (50, 200, 50), 1: (200, 200, 50), 2: (200, 100, 50), 3: (200, 50, 50)}
 
@@ -384,10 +384,10 @@ CHANCE_DISPARO_BASE = 0.0004
 CHANCE_DISPARO_INCREMENTO = 0.00002 
 CHANCE_DISPARO_POR_TIPO = {
     TIPO_ENEMIGO_NORMAL: 1.0,
-    TIPO_ENEMIGO_RAPIDO: 1.5,
+    TIPO_ENEMIGO_RAPIDO: 2.9,
     TIPO_ENEMIGO_TANQUE: 0.5,
-    TIPO_ENEMIGO_ELITE: 2.9,
-    TIPO_ENEMIGO_TESORO: 6.0
+    TIPO_ENEMIGO_ELITE: 4.9,
+    TIPO_ENEMIGO_TESORO: 9.5
 }
 VEL_MONSTRUO_BASE_X = 0.2 
 DISTANCIA_DESCENSO_BASE = 4
@@ -400,7 +400,7 @@ MULT_DISPARO_DIFICIL = 2.9
 
 # --- BOSSES ---
 FRECUENCIA_BOSS = 5 
-HP_BOSS_BASE = 750 
+HP_BOSS_BASE = 700 
 VEL_BOSS_X_MAX = 4.0
 VEL_BOSS_Y_MAX = 2.0
 LIMITE_INFERIOR_BOSS = 300 
@@ -417,14 +417,14 @@ BOSS_TIPO_TOXICO = 2
 BOSS_TIPO_FUEGO = 3
 BOSS_TIPO_SNAKE = 4
 
-HP_BOSS_SNAKE = 4500
+HP_BOSS_SNAKE = 4200
 BOSS_FUEGO_COLOR = (255, 69, 0)
 PATH_BOSS_ATAQUE = "assets/boss_ataque.png"
 PATH_BOSS_MUERTE = "assets/boss_muerte.png"
 
 # --- EFECTOS DE ESTADO ---
-DURACION_CONGELACION_NORMAL = 2000
-DURACION_CONGELACION_BOSS = 600
+DURACION_CONGELACION_NORMAL = 2200
+DURACION_CONGELACION_BOSS = 660
 
 # --- POWER-UPS ---
 PROB_CORAZON = 0.0008 
@@ -432,16 +432,16 @@ CANTIDAD_GRUPOS_BARRERAS = 3
 BARRERA_VIDA_MAX = 10      
 BARRERA_ANCHO = 40         
 BARRERA_ALTO = 9
-PROB_POWERUP_CIELO = 0.0002 
+PROB_POWERUP_CIELO = 0.0001 
 PROB_POWERUP_BASE = 0.12 
 PROB_POWERUP_ENDGAME = 0.30
-PROB_POWERUP_RAYO = 0.03 
+PROB_POWERUP_RAYO = 0.02
 
-TIEMPO_SIN_POWERUP_MS_BONUS = 10000
-BONUS_PROB_POR_SEGUNDO = 0.005
-BONUS_PROB_MAXIMO = 0.25
+TIEMPO_SIN_POWERUP_MS_BONUS = 15000
+BONUS_PROB_POR_SEGUNDO = 0.004
+BONUS_PROB_MAXIMO = 0.20
 BONUS_PROB_BOSS = 2.0
-INTERVALO_MINIMO_POWERUPS = 500
+INTERVALO_MINIMO_POWERUPS = 800
 
 COLORES_PU = {
     "cadencia": (0, 255, 255), "arco": (255, 0, 255), "disparo_doble": (0, 255, 0),
@@ -450,12 +450,12 @@ COLORES_PU = {
     "orbital": ROJO_ORBITAL, "homing": AZUL_HOMING
 }
 POWERUPS_STATS = {
-    "cadencia": {"duracion": 8000}, "arco": {"cargas": 6}, "disparo_doble": {"cargas": 8},
-    "disparo_triple": {"cargas": 5}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9000},
-    "doble_danio": {"duracion": 9000},
+    "cadencia": {"duracion": 8000}, "arco": {"cargas": 5}, "disparo_doble": {"cargas": 8},
+    "disparo_triple": {"cargas": 4}, "explosivo": {"cargas": 3}, "escudo": {"duracion": 9500},
+    "doble_danio": {"duracion": 9500},
     "rayo": {"cargas": 2},
     "orbital": {"duracion": 15000},
-    "homing": {"cargas": 12}
+    "homing": {"cargas": 15}
 }
 
 UNLOCK_REQ_ORBITAL = 1
