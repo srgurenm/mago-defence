@@ -171,17 +171,27 @@ class GestorDatos:
             try:
                 import tkinter as tk
                 from tkinter import filedialog
+                import traceback
                 root = tk.Tk()
                 root.withdraw()
+                root.attributes("-topmost", True)
+                root.lift()
                 ruta = filedialog.asksaveasfilename(defaultextension=".json", initialfile="save_data_rogue.json", title="Exportar Partida")
                 root.destroy()
                 if ruta:
                     with open(ruta, 'w') as f:
                         f.write(data_str)
-            except:
-                # Fallback simple si tkinter falla
-                with open("export_save_data.json", 'w') as f:
-                    f.write(data_str)
+                    print(f"Partida exportada a: {ruta}")
+            except Exception as e:
+                import traceback
+                print(f"Error al exportar localmente: {e}")
+                traceback.print_exc()
+                # Fallback simple
+                try:
+                    with open("export_save_data.json", 'w') as f:
+                        f.write(data_str)
+                    print("Guardado en archivo de emergencia: export_save_data.json")
+                except: pass
 
     def importar_save_json(self, juego_callback=None):
         """Importa datos desde un archivo JSON."""
@@ -220,8 +230,11 @@ class GestorDatos:
             try:
                 import tkinter as tk
                 from tkinter import filedialog
+                import traceback
                 root = tk.Tk()
                 root.withdraw()
+                root.attributes("-topmost", True)
+                root.lift()
                 ruta = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")], title="Importar Partida")
                 root.destroy()
                 if ruta and os.path.exists(ruta):
@@ -229,10 +242,13 @@ class GestorDatos:
                         data = json.load(f)
                         self._fusionar_datos(data)
                         self.guardar()
+                        print(f"Partida importada desde: {ruta}")
                         if juego_callback:
                             juego_callback()
-            except:
-                pass
+            except Exception as e:
+                import traceback
+                print(f"Error al importar localmente: {e}")
+                traceback.print_exc()
 
 class Juego:
     def __init__(self):
@@ -320,10 +336,10 @@ class Juego:
         self.rect_tienda_item_3 = pygame.Rect(ANCHO//2 + 90, 120, 160, 180)
         self.rect_btn_volver_tienda = pygame.Rect(ANCHO//2 - 100, ALTO - 60, 200, 40)
         
-        # Botones de Exportar/Importar en Menú Principal
+        # Botones de Exportar/Importar en Menú Principal (Movidos para evitar overlaps)
         btn_w_si = 130
-        self.rect_btn_exportar = pygame.Rect(10, 50, btn_w_si, 30)
-        self.rect_btn_importar = pygame.Rect(10, 90, btn_w_si, 30)
+        self.rect_btn_exportar = pygame.Rect(10, 140, btn_w_si, 35)
+        self.rect_btn_importar = pygame.Rect(10, 185, btn_w_si, 35)
         
         # Botones del menú DEBUG
         btn_w, btn_h = 250, 40
