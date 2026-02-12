@@ -66,19 +66,18 @@ class GestorDatos:
                 for mk, mv in v.items():
                     if mk in self.datos["mejoras"]:
                         self.datos["mejoras"][mk] = mv
-                    else:
-                        self.datos["mejoras"][mk] = mv
-                for def_k, def_v in self.datos["mejoras"].items():
-                    if def_k not in v:
-                        v[def_k] = def_v
             elif k == "habilidades_especiales":
+                if not isinstance(v, dict): continue
                 for hk, hv in v.items():
                     if hk in self.datos["habilidades_especiales"]:
                         self.datos["habilidades_especiales"][hk] = hv
             else:
                 self.datos[k] = v
-        if "unlocked_snake" not in self.datos:
-            self.datos["unlocked_snake"] = False
+        
+        # Garantizar claves de desbloqueo
+        for key in ["unlocked_loco", "unlocked_snake"]:
+            if key not in self.datos:
+                self.datos[key] = False
 
     def guardar(self):
         if self.es_web:
@@ -1312,7 +1311,8 @@ class Juego:
             r = rects[i]
             pygame.draw.rect(self.pantalla, GRIS_TARJETA, r, border_radius=15)
             pygame.draw.rect(self.pantalla, BORDE_TARJETA, r, 3, border_radius=15)
-            self.dibujar_texto(info["nombre"], self.fuente_md, BLANCO, r.centerx, r.top + 30)
+            # Ajustar nombre si es muy largo
+            self.dibujar_texto_ajustado(info["nombre"], self.fuente_md, BLANCO, pygame.Rect(r.x + 5, r.top + 15, r.width - 10, 30))
             self.dibujar_texto(f"Nivel: {lvl}/{info['max']}", self.fuente_sm, ORO_PODER, r.centerx, r.top + 60)
             costo = int(info["base"] * (FACTOR_COSTO_TIENDA ** lvl))
             if lvl >= info["max"]: 
@@ -1324,7 +1324,7 @@ class Juego:
                 txt_costo = f"{costo} Gemas"
                 c_precio = CIAN_MAGIA if self.gestor_datos.datos['cristales'] >= costo else ROJO_VIDA
             
-            self.dibujar_texto(txt_costo, self.fuente_md, c_precio, r.centerx, r.bottom - 40)
+            self.dibujar_texto_ajustado(txt_costo, self.fuente_md, c_precio, pygame.Rect(r.x + 5, r.bottom - 45, r.width - 10, 30))
             
         pygame.draw.rect(self.pantalla, ROJO_VIDA, self.rect_btn_volver_tienda, border_radius=10)
         self.dibujar_texto("VOLVER AL MENU", self.fuente_md, BLANCO, self.rect_btn_volver_tienda.centerx, self.rect_btn_volver_tienda.centery)
@@ -1476,19 +1476,12 @@ class Juego:
     def dibujar_tarjeta_mejora(self, rect, titulo, desc, color):
         pygame.draw.rect(self.pantalla, GRIS_TARJETA, rect, border_radius=15)
         pygame.draw.rect(self.pantalla, color, rect, 3, border_radius=15)
-        self.dibujar_texto(titulo, self.fuente_md, color, rect.centerx, rect.top + 35)
-        # Wrap de texto simple
-        palabras = desc.split(' ')
-        lineas = []; linea = ""
-        for p in palabras:
-            if len(linea + p) > 18: lineas.append(linea); linea = p + " "
-            else: linea += p + " "
-        lineas.append(linea)
         
-        y_off = 75
-        for l in lineas:
-            self.dibujar_texto(l, self.fuente_sm, BLANCO, rect.centerx, rect.top + y_off)
-            y_off += 25
+        # Título ajustado para no salir del cuadro
+        self.dibujar_texto_ajustado(titulo, self.fuente_md, color, pygame.Rect(rect.x + 10, rect.top + 20, rect.width - 20, 40))
+        
+        # Descripción con párrafo real (no manual)
+        self.dibujar_texto_parrafo(desc, self.fuente_sm, BLANCO, pygame.Rect(rect.x + 15, rect.top + 60, rect.width - 30, rect.height - 70))
 
     def dibujar(self):
         off_x, off_y = (random.randint(-4,4), random.randint(-4,4)) if self.screen_shake > 0 else (0,0)
@@ -1595,23 +1588,23 @@ class Juego:
                     except:
                         pass
                 
-                # Nombre en la parte superior
-                self.dibujar_texto(d["nombre"], self.fuente_md, d["color"], rect.centerx, rect.top + 105)
+                # Nombre en la parte superior (Ajustado)
+                self.dibujar_texto_ajustado(d["nombre"], self.fuente_md, d["color"], pygame.Rect(rect.x + 5, rect.top + 100, rect.width - 10, 30))
                 
                 # Descripción principal
-                self.dibujar_texto(d["desc"], self.fuente_sm, BLANCO, rect.centerx, rect.top + 130)
-                self.dibujar_texto(d["detalle"], self.fuente_xs, GRIS_DESACTIVADO, rect.centerx, rect.top + 150)
+                self.dibujar_texto_ajustado(d["desc"], self.fuente_sm, BLANCO, pygame.Rect(rect.x + 10, rect.top + 130, rect.width - 20, 20))
+                self.dibujar_texto_ajustado(d["detalle"], self.fuente_xs, GRIS_DESACTIVADO, pygame.Rect(rect.x + 10, rect.top + 150, rect.width - 20, 16))
                 
                 # Línea separadora
-                pygame.draw.line(self.pantalla, (80, 80, 90), (rect.left + 15, rect.top + 170), (rect.right - 15, rect.top + 170), 1)
+                pygame.draw.line(self.pantalla, (80, 80, 90), (rect.left + 15, rect.top + 172), (rect.right - 15, rect.top + 172), 1)
                 
                 # Stats en la parte inferior
                 y_stats = rect.top + 185
                 txt_danio = f"Daño: {s['danio_multi']:.1f}x"
-                self.dibujar_texto(txt_danio, self.fuente_xs, NARANJA_FUEGO, rect.centerx, y_stats)
+                self.dibujar_texto_ajustado(txt_danio, self.fuente_xs, NARANJA_FUEGO, pygame.Rect(rect.x + 5, y_stats, rect.width - 10, 16))
                 
                 txt_vel = f"Vel: {s['velocidad_ataque_multi']:.1f}x"
-                self.dibujar_texto(txt_vel, self.fuente_xs, CIAN_MAGIA, rect.centerx, y_stats + 20)
+                self.dibujar_texto_ajustado(txt_vel, self.fuente_xs, CIAN_MAGIA, pygame.Rect(rect.x + 5, y_stats + 18, rect.width - 10, 16))
                 
                 # Modificadores y proyectiles
                 y_mods = y_stats + 40
@@ -1798,8 +1791,8 @@ class Juego:
 
         if info_parts:
              full_text = " | ".join(info_parts)
-             
-             self.dibujar_texto(full_text, self.fuente_sm, CIAN_MAGIA, ANCHO//2, 85)
+             # Dibujar con escala si es muy largo para que no estorbe
+             self.dibujar_texto_ajustado(full_text, self.fuente_sm, CIAN_MAGIA, pygame.Rect(10, 80, ANCHO - 20, 20))
          
         # Boss Bar
         if self.boss_instancia and not self.boss_instancia.destruyendo:
@@ -1875,6 +1868,43 @@ class Juego:
         s = self.text_cache[key]
         r = s.get_rect(center=(x, y))
         self.pantalla.blit(s, r)
+
+    def dibujar_texto_ajustado(self, texto, fuente, color, rect, alineacion="center"):
+        """Dibuja texto escalándolo para que quepa en el ancho del rect."""
+        texto_str = str(texto)
+        rendered = fuente.render(texto_str, True, color)
+        if rendered.get_width() > rect.width:
+            escala = rect.width / rendered.get_width()
+            nueva_h = int(rendered.get_height() * escala)
+            rendered = pygame.transform.smoothscale(rendered, (rect.width, nueva_h))
+        
+        if alineacion == "center":
+            r = rendered.get_rect(center=rect.center)
+        else: # left
+            r = rendered.get_rect(midleft=(rect.x, rect.centery))
+        self.pantalla.blit(rendered, r)
+
+    def dibujar_texto_parrafo(self, texto, fuente, color, rect, interlineado=22):
+        """Dibuja un párrafo con wrap automático basado en píxeles."""
+        palabras = str(texto).split(' ')
+        lineas = []
+        linea_actual = ""
+        
+        for p in palabras:
+            test_linea = linea_actual + p + " "
+            if fuente.size(test_linea)[0] < rect.width:
+                linea_actual = test_linea
+            else:
+                lineas.append(linea_actual)
+                linea_actual = p + " "
+        lineas.append(linea_actual)
+        
+        y_dibujo = rect.y
+        for l in lineas:
+            if y_dibujo + interlineado > rect.bottom: break
+            surf = fuente.render(l.strip(), True, color)
+            self.pantalla.blit(surf, (rect.centerx - surf.get_width()//2, y_dibujo))
+            y_dibujo += interlineado
 
     def update(self):
         self.manejar_ambiente()
