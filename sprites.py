@@ -1550,6 +1550,11 @@ class AdvertenciaLaser(pygame.sprite.Sprite):
 class BossSNAKE(Boss):
     def __init__(self, dificultad=MODO_NORMAL, nivel=10):
         super().__init__(nivel=nivel, dificultad=dificultad, variante=BOSS_TIPO_SNAKE)
+        # Reposicionar el boss en la parte superior visible de la pantalla
+        # El boss base empieza en Y = -180 (fuera de pantalla), lo movemos a Y = 50 (visible)
+        self.pos_y = 50
+        self.rect.y = 50
+        
         self.hp_max = HP_BOSS_SNAKE
         if dificultad == MODO_DIFICIL: self.hp_max *= 1.5
         self.hp = self.hp_max
@@ -1579,9 +1584,10 @@ class BossSNAKE(Boss):
         # Control de proximidad al jugador (máximo 1 segundo cerca)
         self.tiempo_cerca_jugador = 0
         self.ultimo_tiempo_cerca = 0
-        self.distancia_cerca = 200  # AUMENTADO: De 150 a 200
-        self.max_tiempo_cerca = 1000  # REDUCIDO: De 1.5s a 1.0s
+        self.distancia_cerca = 180  # Distancia a la que se considera "cerca"
+        self.max_tiempo_cerca = 1000  # Máximo 1 segundo cerca
         self.forzar_alejamiento = False
+        self.zona_segura_y = 100  # El boss intentará staying above this Y
         
         # Aviso para láseres
         self.advertencia_laser_activa = False
@@ -1601,6 +1607,10 @@ class BossSNAKE(Boss):
         
         # Inicializar posición inicial de embestida
         self.pos_inicial_embestida = (0, 0)
+        
+        # Ataques básicos (proyectiles hacia abajo)
+        self.ultimo_ataque_basico = 0
+        self.cooldown_ataque_basico = 2500  # Cada 2.5 segundos
 
         # Variables de animación
         self.anim_timer = 0
@@ -1885,17 +1895,23 @@ class BossSNAKE(Boss):
         
         # Movimiento normal o alejamiento forzado
         if self.forzar_alejamiento and mago:
-            # Alejarse muy rápidamente del jugador
+            # alejarse rápidamente del jugador, pero siempre hacia arriba
             dx = self.rect.centerx - mago.rect.centerx
             dy = self.rect.centery - mago.rect.centery
             dist = math.hypot(dx, dy)
-            if dist > 0:
-                # AUMENTADO: Velocidad de alejamiento de 8 a 15
-                self.pos_x += (dx / dist) * 15
-                self.pos_y += (dy / dist) * 15
             
-            # Dejar de forzar alejamiento cuando esté lo suficientemente lejos
-            if distancia >= self.distancia_cerca * 1.5:
+            if dist > 0:
+                # Componente horizontal normal
+                self.pos_x += (dx / dist) * 12
+                # Componente vertical: siempre hacia arriba si está cerca
+                if self.rect.centery > self.zona_segura_y:
+                    # Forzar movimiento hacia arriba
+                    self.pos_y -= 8
+                else:
+                    self.pos_y += (dy / dist) * 8
+            
+            # Dejar de forzar alejamiento cuando esté lo suficientemente lejos O arriba
+            if distancia >= self.distancia_cerca * 1.5 or self.pos_y < self.zona_segura_y:
                 self.forzar_alejamiento = False
                 self.tiempo_cerca_jugador = 0
                 self.ultimo_tiempo_cerca = 0
@@ -1905,20 +1921,48 @@ class BossSNAKE(Boss):
             self.pos_x += math.sin(self.angulo_SNAKE) * 3
             self.pos_y += math.cos(self.angulo_SNAKE * 0.5) * 1.5
 
-        if self.pos_x < 30: self.vx = abs(self.vx)
-        if self.pos_x > ANCHO - 230: self.vx = -abs(self.vx)
-        if self.pos_y < 20: self.vy = abs(self.vy)
-        # Limitar al boss a la parte superior de la pantalla (máximo Y = 200)
-        if self.pos_y > 200: 
-            self.pos_y = 200
-            self.vy = -abs(self.vy)
+        # BossSNAKE tiene su propio sistema de movimiento - mantener arriba y cerca del jugador
+        # Límites de pantalla propios
+        if self.pos_x < 30: 
+            self.pos_x = 30
+            self.vx = abs(self.vx)
+        if self.pos_x > ANCHO - 230: 
+            self.pos_x = ANCHO - 230
+            self.vx = -abs(self.vx)
+        
+        # Mantener al boss en la parte superior de la pantalla (entre Y=20 y Y=250)
+        if self.pos_y < 20: 
+            self.pos_y = 20
+        if self.pos_y > 250: 
+            self.pos_y = 250
+        
+        # Aplicar movimiento al rect
+        self.rect.x, self.rect.y = int(self.pos_x), int(self.pos_y)
 
         self.image = self.obtener_imagen_animada("idle")
 
-        # BossSNAKE no usa el ataque cargado de bomba de la clase Boss
-        # Solo llamamos a update de Sprite, no de Boss
-        pygame.sprite.Sprite.update(self, *args, **kwargs)
+        # No llamamos al update de Boss para evitar que ejecute su lógica de movimiento
 
+        # Fase 1: Ataques básicos (proyectiles hacia abajo) - solo si no hay advertencia y está lejos del jugador
+        distancia_jugador = 9999
+        if mago:
+            dx = mago.rect.centerx - self.rect.centerx
+            dy = mago.rect.centery - self.rect.centery
+            distancia_jugador = math.hypot(dx, dy)
+        
+        distancia_minima_ataque = 250  # Solo ataca si está a más de 250px del jugador
+        
+        if not self.segunda_fase and not self.advertencia_laser_activa and not self.timer_advertencia and ahora - self.ultimo_ataque_basico > self.cooldown_ataque_basico and distancia_jugador > distancia_minima_ataque:
+            # Solo ataca si no hay otras advertencias activas Y está lejos del jugador
+            self.ultimo_ataque_basico = ahora
+            # 3 proyectiles en arco hacia abajo
+            for angulo in [60, 90, 120]:
+                rad = math.radians(angulo)
+                vx = math.cos(rad) * 5
+                vy = math.sin(rad) * 5
+                p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(200, 100, 255))
+                grupo_s.add(p); grupo_b.add(p)
+ 
         if self.segunda_fase:
             # Fase 2: Lluvia de proyectiles en abanico
             if ahora % 800 < 50:
