@@ -646,7 +646,8 @@ class Mago(pygame.sprite.Sprite):
             potencia_carga = self.carga / self.max_carga
             potencia = max(0.25, potencia_carga)
             
-            if self.carga >= 100:
+            # SOLO disparar cuando la carga está al 100%
+            if self.carga >= self.max_carga:
                 if self.snd_disparo: self.snd_disparo.play()
                 
                 multi_danio = self.stats.get("danio_multi", 1.0)
@@ -1469,6 +1470,83 @@ class LaserSNAKE(pygame.sprite.Sprite):
         # El núcleo del láser es blanco
         pygame.draw.line(self.image, (255, 255, 255, int(255 * (1-ratio))), (self.x, self.y), (fin_x, fin_y), int(ancho/4))
 
+class AdvertenciaLaser(pygame.sprite.Sprite):
+    """Muestra una línea de advertencia antes de que salga el láser"""
+    def __init__(self, x, y, angulo, duracion_ms=1500):
+        super().__init__()
+        self.x = x
+        self.y = y
+        self.angulo = angulo
+        self.duracion_total = duracion_ms
+        self.tiempo_inicio = pygame.time.get_ticks()
+        self.parpadeo_rapido = False
+        
+        # Crear imagen grande para la línea
+        self.image = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+        
+    def update(self, *args, **kwargs):
+        tiempo_actual = pygame.time.get_ticks()
+        tiempo_transcurrido = tiempo_actual - self.tiempo_inicio
+        tiempo_restante = self.duracion_total - tiempo_transcurrido
+        
+        if tiempo_restante <= 0:
+            self.kill()
+            return
+            
+        # Limpiar imagen
+        self.image.fill((0, 0, 0, 0))
+        
+        # Calcular punto final de la línea
+        rad = math.radians(self.angulo)
+        fin_x = self.x + math.cos(rad) * 1000
+        fin_y = self.y + math.sin(rad) * 1000
+        
+        # Progreso de la advertencia (0 a 1)
+        progreso = tiempo_transcurrido / self.duracion_total
+        
+        # Parpadeo acelerado al final
+        if tiempo_restante < 400:
+            parpadeo = (tiempo_actual // 50) % 2 == 0
+            alpha = 200 if parpadeo else 50
+            grosor = 4
+        elif tiempo_restante < 800:
+            parpadeo = (tiempo_actual // 100) % 2 == 0
+            alpha = 150 if parpadeo else 80
+            grosor = 3
+        else:
+            parpadeo = (tiempo_actual // 150) % 2 == 0
+            alpha = 120 if parpadeo else 60
+            grosor = 2
+        
+        # Dibujar línea de advertencia roja punteada
+        color = (255, 50, 50)  # Rojo para láseres
+        
+        # Línea principal punteada
+        distancia_total = math.hypot(fin_x - self.x, fin_y - self.y)
+        segmentos = int(distancia_total / 20)
+        for i in range(segmentos):
+            inicio_seg = i / segmentos
+            fin_seg = (i + 0.5) / segmentos
+            x1 = self.x + (fin_x - self.x) * inicio_seg
+            y1 = self.y + (fin_y - self.y) * inicio_seg
+            x2 = self.x + (fin_x - self.x) * fin_seg
+            y2 = self.y + (fin_y - self.y) * fin_seg
+            pygame.draw.line(self.image, (*color, alpha), (x1, y1), (x2, y2), grosor)
+        
+        # Círculo en el origen
+        pygame.draw.circle(self.image, (*color, alpha + 50), (int(self.x), int(self.y)), 8 + int(progreso * 4))
+        pygame.draw.circle(self.image, (255, 200, 200, alpha), (int(self.x), int(self.y)), 4)
+        
+        # Texto de advertencia "!" flotante cerca del origen
+        if parpadeo and tiempo_restante < 1000:
+            # Pequeño indicador de exclamación
+            offset_x = math.sin(tiempo_actual * 0.01) * 10
+            excla_x = int(self.x + offset_x)
+            excla_y = int(self.y - 25)
+            pygame.draw.circle(self.image, (255, 0, 0, 255), (excla_x, excla_y - 5), 3)
+            pygame.draw.rect(self.image, (255, 0, 0, 255), (excla_x - 1, excla_y, 2, 8))
+
 class BossSNAKE(Boss):
     def __init__(self, dificultad=MODO_NORMAL, nivel=10):
         super().__init__(nivel=nivel, dificultad=dificultad, variante=BOSS_TIPO_SNAKE)
@@ -1490,10 +1568,39 @@ class BossSNAKE(Boss):
         self.embestiendo = False
         self.timer_advertencia = 0
         self.direccion_embestida = None
-        self.velocidad_embestida = 25
+        self.velocidad_embestida = 12  # REDUCIDO: De 16 a 12 para ser más esquivable y menos espacio
         self.ultimo_ataque_embestida = -10000
-        self.cooldown_embestida = 2000
-        self.distancia_min_embestida = 200
+        self.cooldown_embestida = 3000  # AUMENTADO: De 2500 a 3000ms para menos spam
+        self.distancia_min_embestida = 350  # AUMENTADO: De 300 a 350, no embestir si está muy cerca
+        self.distancia_max_embestida = 600  # NUEVO: No embestir si está muy lejos
+        self.tiempo_advertencia_ms = 2500  # NUEVO: 2.5 segundos de advertencia (antes era 1500)
+        self.distancia_embestida_maxima = 400  # Máxima distancia que recorre en embestida
+        
+        # Control de proximidad al jugador (máximo 1 segundo cerca)
+        self.tiempo_cerca_jugador = 0
+        self.ultimo_tiempo_cerca = 0
+        self.distancia_cerca = 200  # AUMENTADO: De 150 a 200
+        self.max_tiempo_cerca = 1000  # REDUCIDO: De 1.5s a 1.0s
+        self.forzar_alejamiento = False
+        
+        # Aviso para láseres
+        self.advertencia_laser_activa = False
+        self.tiempo_advertencia_laser = 0
+        self.duracion_advertencia_laser = 1500  # 1.5 segundos de aviso
+        self.advertencias_laser_grupo = pygame.sprite.Group()  # Grupo para las líneas de advertencia
+        self.angulos_laser_pendientes = []  # Guardar ángulos para las advertencias
+        
+        # Inicializar posiciones de láser guardadas
+        self.laser_pos_x = 0
+        self.laser_pos_y = 0
+        self.laser_angulo = 0
+        self.laser_ojo_izq_x = 0
+        self.laser_ojo_izq_y = 0
+        self.laser_ojo_der_x = 0
+        self.laser_ojo_der_y = 0
+        
+        # Inicializar posición inicial de embestida
+        self.pos_inicial_embestida = (0, 0)
 
         # Variables de animación
         self.anim_timer = 0
@@ -1682,6 +1789,10 @@ class BossSNAKE(Boss):
         mago = kwargs.get('mago', None)
 
         if self.destruyendo or self.congelado:
+            # Limpiar advertencias de láser al morir
+            for adv in self.advertencias_laser_grupo:
+                adv.kill()
+            self.advertencias_laser_grupo.empty()
             self.image = self.obtener_imagen_animada("muerte")
             super().update(*args, **kwargs)
             return
@@ -1696,7 +1807,12 @@ class BossSNAKE(Boss):
             self.pos_y += self.direccion_embestida[1] * self.velocidad_embestida
             self.rect.x, self.rect.y = int(self.pos_x), int(self.pos_y)
             self.image = self.obtener_imagen_animada("embestida")
-            if self.rect.right < 0 or self.rect.left > ANCHO or self.rect.top > ALTO:
+            
+            # Verificar si recorrió la distancia máxima de embestida
+            distancia_recorrida = math.hypot(self.pos_x - self.pos_inicial_embestida[0], 
+                                            self.pos_y - self.pos_inicial_embestida[1])
+            
+            if self.rect.right < 0 or self.rect.left > ANCHO or self.rect.top > ALTO or distancia_recorrida > self.distancia_embestida_maxima:
                 self.embestiendo = False
                 self.direccion_embestida = None
             return
@@ -1709,36 +1825,99 @@ class BossSNAKE(Boss):
                 dy = mago.rect.centery - self.rect.centery
                 dist = math.hypot(dx, dy)
                 if dist > 0:
+                    # Calcular dirección hacia donde está mirando el jugador (predicción)
+                    # En lugar de ir directo al jugador, va a donde el jugador estaba cuando empezó la carga
                     self.direccion_embestida = (dx / dist, dy / dist)
                     self.embestiendo = True
                     self.ultimo_ataque_embestida = ahora
             else:
-                if (ahora // 200) % 2 == 0:
+                # MEJORADO: Parpadeo más rápido e intenso durante la carga
+                tiempo_restante = self.timer_advertencia - ahora
+                # Cuando falta menos tiempo, parpadea más rápido
+                if tiempo_restante < 500:
+                    velocidad_parpadeo = 100  # Muy rápido al final
+                elif tiempo_restante < 1500:
+                    velocidad_parpadeo = 200  # Rápido
+                else:
+                    velocidad_parpadeo = 300  # Normal al inicio
+                    
+                if (ahora // velocidad_parpadeo) % 2 == 0:
                     self.image = self.obtener_imagen_animada("ataque")
                 else:
                     self.image = self.obtener_imagen_animada("advertencia")
             return
 
-        if self.dificultad == MODO_DIFICIL and self.timer_advertencia == 0 and not self.embestiendo:
+        # Solo puede hacer ataque cargado si está suficientemente arriba (pos_y < 180)
+        puede_embestir = self.pos_y < 180
+        
+        if self.dificultad == MODO_DIFICIL and self.timer_advertencia == 0 and not self.embestiendo and puede_embestir:
             ahora = pygame.time.get_ticks()
             dx = mago.rect.centerx - self.rect.centerx
             dy = mago.rect.centery - self.rect.centery
             dist = math.hypot(dx, dy)
-            if random.random() < 0.002 and ahora - self.ultimo_ataque_embestida > self.cooldown_embestida and dist > self.distancia_min_embestida:
-                self.timer_advertencia = ahora + 1500
+            # Verificar que esté a distancia apropiada: ni muy cerca ni muy lejos
+            if random.random() < 0.002 and ahora - self.ultimo_ataque_embestida > self.cooldown_embestida and self.distancia_min_embestida < dist < self.distancia_max_embestida:
+                self.timer_advertencia = ahora + self.tiempo_advertencia_ms
+                # Guardar posición inicial para limitar distancia de embestida
+                self.pos_inicial_embestida = (self.pos_x, self.pos_y)
 
-        self.angulo_SNAKE += 0.05
-        self.pos_x += math.sin(self.angulo_SNAKE) * 3
-        self.pos_y += math.cos(self.angulo_SNAKE * 0.5) * 1.5
+        # Calcular distancia al jugador
+        distancia = 9999
+        if mago:
+            dx = mago.rect.centerx - self.rect.centerx
+            dy = mago.rect.centery - self.rect.centery
+            distancia = math.hypot(dx, dy)
+            
+            # Control de proximidad: no más de 1.5 segundos cerca
+            if distancia < self.distancia_cerca:
+                if self.ultimo_tiempo_cerca == 0:
+                    self.ultimo_tiempo_cerca = ahora
+                else:
+                    self.tiempo_cerca_jugador = ahora - self.ultimo_tiempo_cerca
+                    
+                if self.tiempo_cerca_jugador >= self.max_tiempo_cerca:
+                    self.forzar_alejamiento = True
+            else:
+                # Resetear contador cuando se aleja
+                self.tiempo_cerca_jugador = 0
+                self.ultimo_tiempo_cerca = 0
+                self.forzar_alejamiento = False
+        
+        # Movimiento normal o alejamiento forzado
+        if self.forzar_alejamiento and mago:
+            # Alejarse muy rápidamente del jugador
+            dx = self.rect.centerx - mago.rect.centerx
+            dy = self.rect.centery - mago.rect.centery
+            dist = math.hypot(dx, dy)
+            if dist > 0:
+                # AUMENTADO: Velocidad de alejamiento de 8 a 15
+                self.pos_x += (dx / dist) * 15
+                self.pos_y += (dy / dist) * 15
+            
+            # Dejar de forzar alejamiento cuando esté lo suficientemente lejos
+            if distancia >= self.distancia_cerca * 1.5:
+                self.forzar_alejamiento = False
+                self.tiempo_cerca_jugador = 0
+                self.ultimo_tiempo_cerca = 0
+        else:
+            # Movimiento normal
+            self.angulo_SNAKE += 0.05
+            self.pos_x += math.sin(self.angulo_SNAKE) * 3
+            self.pos_y += math.cos(self.angulo_SNAKE * 0.5) * 1.5
 
         if self.pos_x < 30: self.vx = abs(self.vx)
         if self.pos_x > ANCHO - 230: self.vx = -abs(self.vx)
         if self.pos_y < 20: self.vy = abs(self.vy)
-        if self.pos_y > 300: self.vy = -abs(self.vy)
+        # Limitar al boss a la parte superior de la pantalla (máximo Y = 200)
+        if self.pos_y > 200: 
+            self.pos_y = 200
+            self.vy = -abs(self.vy)
 
         self.image = self.obtener_imagen_animada("idle")
 
-        super().update(*args, **kwargs)
+        # BossSNAKE no usa el ataque cargado de bomba de la clase Boss
+        # Solo llamamos a update de Sprite, no de Boss
+        pygame.sprite.Sprite.update(self, *args, **kwargs)
 
         if self.segunda_fase:
             # Fase 2: Lluvia de proyectiles en abanico
@@ -1749,19 +1928,80 @@ class BossSNAKE(Boss):
                      p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(255, 50, 50))
                      grupo_s.add(p); grupo_b.add(p)
         else:
-            # Fase 1: Láseres
-            if ahora - self.ultimo_laser > 5000:
-                self.ultimo_laser = ahora
-                tipo_atk = random.choice(["boca", "ojos"])
-                if tipo_atk == "boca":
-                    # Láser directo al jugador
-                    dx = mago.rect.centerx - self.rect.centerx
-                    dy = mago.rect.centery - self.rect.centery
-                    ang = math.degrees(math.atan2(dy, dx))
-                    l = LaserSNAKE(self.rect.centerx, self.rect.centery + 40, ang)
-                    grupo_s.add(l)
+            # Fase 1: Láseres con aviso previo visual
+            if not self.advertencia_laser_activa and ahora - self.ultimo_laser > 5000:
+                # Iniciar advertencia 1.5 segundos antes del láser
+                self.advertencia_laser_activa = True
+                self.tiempo_advertencia_laser = ahora + self.duracion_advertencia_laser
+                self.tipo_laser_pendiente = random.choice(["boca", "ojos"])
+                
+                # Crear líneas de advertencia visuales inmediatamente
+                # Guardar posiciones exactas para que el láser salga exactamente donde se muestra la advertencia
+                if 0 < self.rect.centerx < ANCHO and 0 < self.rect.centery < ALTO:
+                    if self.tipo_laser_pendiente == "boca":
+                        # Láser desde la boca apuntando al jugador
+                        dx = mago.rect.centerx - self.rect.centerx
+                        dy = mago.rect.centery - self.rect.centery
+                        ang = math.degrees(math.atan2(dy, dx))
+                        # Guardar posición y ángulo exactos
+                        self.laser_pos_x = self.rect.centerx
+                        self.laser_pos_y = self.rect.centery + 40
+                        self.laser_angulo = ang
+                        adv = AdvertenciaLaser(self.laser_pos_x, self.laser_pos_y, self.laser_angulo, self.duracion_advertencia_laser)
+                        self.advertencias_laser_grupo.add(adv)
+                        grupo_s.add(adv)
+                    else:
+                        # Dos láseres desde los ojos en ángulos fijos
+                        ojo_izq_x = self.rect.x + self.ojo_izq_pos[0]
+                        ojo_izq_y = self.rect.y + self.ojo_izq_pos[1]
+                        ojo_der_x = self.rect.x + self.ojo_der_pos[0]
+                        ojo_der_y = self.rect.y + self.ojo_der_pos[1]
+                        
+                        # Guardar posiciones exactas
+                        self.laser_ojo_izq_x = ojo_izq_x
+                        self.laser_ojo_izq_y = ojo_izq_y
+                        self.laser_ojo_der_x = ojo_der_x
+                        self.laser_ojo_der_y = ojo_der_y
+                        
+                        if 0 < ojo_izq_x < ANCHO and 0 < ojo_izq_y < ALTO:
+                            adv1 = AdvertenciaLaser(ojo_izq_x, ojo_izq_y, 70, self.duracion_advertencia_laser)
+                            self.advertencias_laser_grupo.add(adv1)
+                            grupo_s.add(adv1)
+                        if 0 < ojo_der_x < ANCHO and 0 < ojo_der_y < ALTO:
+                            adv2 = AdvertenciaLaser(ojo_der_x, ojo_der_y, 110, self.duracion_advertencia_laser)
+                            self.advertencias_laser_grupo.add(adv2)
+                            grupo_s.add(adv2)
+            
+            # Actualizar y lanzar láser cuando termine la advertencia
+            self.advertencias_laser_grupo.update()
+            
+            if self.advertencia_laser_activa:
+                if ahora >= self.tiempo_advertencia_laser:
+                    # Lanzar el láser ahora
+                    self.advertencia_laser_activa = False
+                    self.ultimo_laser = ahora
+                    
+                    # Usar las posiciones guardadas (no recalcular) para que coincida exactamente con la advertencia
+                    if self.tipo_laser_pendiente == "boca":
+                        # Láser desde la boca usando posición guardada
+                        l = LaserSNAKE(self.laser_pos_x, self.laser_pos_y, self.laser_angulo)
+                        grupo_s.add(l)
+                    else:
+                        # Dos láseres desde los ojos usando posiciones guardadas
+                        if 0 < self.laser_ojo_izq_x < ANCHO and 0 < self.laser_ojo_izq_y < ALTO:
+                            l1 = LaserSNAKE(self.laser_ojo_izq_x, self.laser_ojo_izq_y, 70)
+                            grupo_s.add(l1)
+                        if 0 < self.laser_ojo_der_x < ANCHO and 0 < self.laser_ojo_der_y < ALTO:
+                            l2 = LaserSNAKE(self.laser_ojo_der_x, self.laser_ojo_der_y, 110)
+                            grupo_s.add(l2)
                 else:
-                    # Dos láseres laterales
-                    l1 = LaserSNAKE(self.rect.x + self.ojo_izq_pos[0], self.rect.y + self.ojo_izq_pos[1], 70)
-                    l2 = LaserSNAKE(self.rect.x + self.ojo_der_pos[0], self.rect.y + self.ojo_der_pos[1], 110)
-                    grupo_s.add(l1); grupo_s.add(l2)
+                    # Durante la advertencia, el boss brilla ligeramente en rojo
+                    tiempo_restante = self.tiempo_advertencia_laser - ahora
+                    # Efecto de brillo rojo creciente
+                    brillo = int(50 + (1 - tiempo_restante / self.duracion_advertencia_laser) * 100)
+                    tinte = (255, 100, 100)
+                    temp = self.image.copy()
+                    overlay = pygame.Surface(temp.get_size(), pygame.SRCALPHA)
+                    overlay.fill((*tinte, brillo))
+                    temp.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+                    self.image = temp

@@ -16,7 +16,7 @@ def resolver_ruta(ruta_relativa):
 ANCHO = 800
 ALTO = 600
 FPS = 60
-VERSION = "1.0.1"
+VERSION = "1.0.3"
 VOLUMEN_MUSICA_DEFAULT = 0.15
 VOLUMEN_SFX_DEFAULT = 0.20
 

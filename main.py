@@ -10,8 +10,8 @@ import settings
 from settings import *
 from sprites import Mago, Monstruo, PowerUp, Barrera, Particula, Boss, Corazon, ParticulaAmbiental, Proyectil, OrbeXP, Rayo, Orbital, Charco, BossSNAKE, LaserSNAKE, EscudoEspecial, CriticoHit, RayoImpacto, TextoFlotante
 
-# Mixer pre-init ajustado
-pygame.mixer.pre_init(44100, -16, 2, 2048)
+# Mixer pre-init ajustado para máxima compatibilidad web (22050Hz es más estable para SFX en Emscripten)
+pygame.mixer.pre_init(22050, -16, 2, 1024)
 
 
 # --- HELPER DE COLISION ---
@@ -277,7 +277,9 @@ class GestorDatos:
 class Juego:
     def __init__(self):
         pygame.init()
-        try: pygame.mixer.init()
+        try: 
+            pygame.mixer.init(22050, -16, 2, 1024)
+            pygame.mixer.set_num_channels(32)
         except: pass
 
         self.pantalla = pygame.display.set_mode((ANCHO, ALTO))
@@ -402,8 +404,10 @@ class Juego:
         self.particulas_ambiente = pygame.sprite.Group()
         self.opciones_mejora_actuales = [] 
         
-        # OPTIMIZACION: Cache de texto
+        # OPTIMIZACION: Cache de texto con límite
         self.text_cache = {}
+        self.text_cache_accesos = {}
+        self.max_cache_size = 100
         
         # UI PAUSA
         self.rect_btn_reiniciar = pygame.Rect(ANCHO//2 - 100, ALTO//2 + 80, 200, 40) 
@@ -418,6 +422,10 @@ class Juego:
 
     def cargar_recursos(self):
         print(f"Iniciando carga de recursos. Sistema: {sys.platform}")
+        # Reservar canales suficientes para evitar cortes en SFX
+        try: pygame.mixer.set_num_channels(32)
+        except: pass
+        
         try:
             vol_mus = self.gestor_datos.datos.get("vol_musica", VOLUMEN_MUSICA_DEFAULT)
             vol_sfx = self.gestor_datos.datos.get("vol_sfx", VOLUMEN_SFX_DEFAULT)
@@ -491,6 +499,12 @@ class Juego:
                 import js
                 # Intentar resumir el contexto de audio via JS directamente
                 js.window.eval("if(window.AudioContext) { const ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); }")
+                # Forzar re-inicialización del mezclador con frecuencia segura
+                try:
+                    pygame.mixer.quit()
+                    pygame.mixer.init(22050, -16, 2, 1024)
+                    pygame.mixer.set_num_channels(32)
+                except: pass
             
             # Cargar y reproducir
             self.cargar_recursos()
@@ -872,6 +886,13 @@ class Juego:
         if self.estado != ESTADO_JUGANDO: return
         ahora, md = pygame.time.get_ticks(), 2 if self.mago.doble_danio_activo else 1
         
+        # OPTIMIZACIÓN: Contador de frames para limitar efectos visuales pesados
+        if not hasattr(self, '_colision_frame_counter'):
+            self._colision_frame_counter = 0
+        self._colision_frame_counter += 1
+        # Solo mostrar textos flotantes cada 3 frames para reducir carga
+        mostrar_texto_danio = (self._colision_frame_counter % 3 == 0)
+        
         # Mago recoge XP
         # Mago recoge XP
         for orbe in pygame.sprite.spritecollide(self.mago, self.orbes_xp, True, collided=collided_hitbox):
@@ -922,8 +943,8 @@ class Juego:
                 if getattr(bala, 'es_critico', False):
                     critico = CriticoHit(e.rect.centerx, e.rect.centery)
                     self.todos_sprites.add(critico)
-                else:
-                    # Floating Text for normal hits
+                elif mostrar_texto_danio:
+                    # OPTIMIZACIÓN: Solo mostrar texto de daño cada 3 frames
                     tf = TextoFlotante(e.rect.centerx, e.rect.top, str(int(bala.danio)), BLANCO, 16)
                     self.todos_sprites.add(tf)
                 
@@ -951,9 +972,21 @@ class Juego:
                     self.puntuacion += pts
                     self.explosion_efecto(e.rect.centerx, e.rect.centery, e.color)
                     
-                    # Soltar XP
+                    # Soltar XP (con límite máximo para evitar acumulación)
+                    max_orbes = 30
+                    if len(self.orbes_xp) >= max_orbes:
+                        # Auto-recoger orbes más antiguos cuando hay demasiados
+                        orbes_list = list(self.orbes_xp)
+                        for viejo_orbe in orbes_list[:5]:
+                            if self.mago.ganar_xp(viejo_orbe.valor):
+                                self.cambiar_estado(ESTADO_SELECCION_MEJORA)
+                                if self.snd_nivel and not self.juego_silenciado: 
+                                    self.snd_nivel.play()
+                            viejo_orbe.kill()
+                    
                     xp = OrbeXP(e.rect.centerx, e.rect.centery)
-                    self.todos_sprites.add(xp); self.orbes_xp.add(xp)
+                    self.todos_sprites.add(xp)
+                    self.orbes_xp.add(xp)
                     
                     drop_cristal = False; cant_cristal = 0
                     if e.tipo == TIPO_ENEMIGO_TESORO: drop_cristal = True; cant_cristal = 5
@@ -1012,16 +1045,21 @@ class Juego:
 
                 if es_hielo: self.boss_instancia.congelar()
                 self.explosion_efecto(b.rect.centerx, b.rect.centery, MORADO_OSCURO)
-                if self.boss_instancia.hp <= 0: 
+                if self.boss_instancia.hp <= 0:
+                    # FIX: Guardar referencia local y limpiar inmediatamente para evitar condiciones de carrera
+                    boss_local = self.boss_instancia
+                    self.boss_instancia = None  # Limpiar referencia inmediatamente
+                    
                     self.puntuacion += 2000 * (self.nivel // FRECUENCIA_BOSS)
                     self.gestor_datos.agregar_cristales(10) 
                     self.gestor_datos.registrar_boss_kill() 
                     
+                    # Limpiar charcos del boss
+                    [c.kill() for c in self.charcos]
+                    
                     # Victoria final - Boss SNAKE nivel 10
-                    if self.nivel == 10 and isinstance(self.boss_instancia, BossSNAKE):
-                        if self.boss_instancia:  # Verificar que boss_instancia no sea None
-                            self.boss_instancia.kill()
-                        self.boss_instancia = None
+                    if self.nivel == 10 and isinstance(boss_local, BossSNAKE):
+                        boss_local.kill()
                         self.gestor_datos.agregar_cristales(100)
                         # DESBLOQUEO DE PERSONAJES
                         self.gestor_datos.datos["unlocked_loco"] = True
@@ -1031,20 +1069,17 @@ class Juego:
                         self.verificar_desbloqueos() # Notificaciones
                         self.clicks_victoria = 0
                         self.cambiar_estado(ESTADO_VICTORIA_FINAL)
-                        break
+                        return  # FIX: Usar return en lugar de break para salir completamente del método
                     elif self.nivel == 5:
-                        # BOSS NIVEL 5: Recompensa especial. Lo matamos y llamamos a recompensar.
-                        if self.boss_instancia: self.boss_instancia.kill()
-                        self.boss_instancia = None
+                        # BOSS NIVEL 5: Recompensa especial
+                        boss_local.kill()
                         # CAMBIO: Llamar a recompensar ANTES de subir el nivel para que detecte nivel 5
                         self.recompensar_boss()
                         self.nivel += 1
-                        break
+                        return  # FIX: Usar return en lugar de break
                     else:
                         # BOSS periodico normal: dar XP directo y avanzar
-                        if self.boss_instancia:
-                            self.boss_instancia.kill()
-                        self.boss_instancia = None
+                        boss_local.kill()
                         xp_boss = (FILAS_MONSTRUOS * COLUMNAS_MONSTRUOS * XP_POR_ENEMIGO) // 2
                         if self.mago.ganar_xp(xp_boss):
                             self.cambiar_estado(ESTADO_SELECCION_MEJORA)
@@ -1052,24 +1087,9 @@ class Juego:
                         else:
                             self.nivel += 1; self.cambiar_estado(ESTADO_TRANSICION)
                         if self.mago.vidas < self.mago.max_vidas: self.mago.vidas += 1
-            
-        if self.boss_instancia and not self.boss_instancia.alive():
-            [c.kill() for c in self.charcos] # Limpiar charcos al morir boss
-            
-            # Victoria final - Boss SNAKE nivel 10
-            if self.nivel == 10 and isinstance(self.boss_instancia, BossSNAKE):
-                self.boss_instancia = None
-                self.gestor_datos.agregar_cristales(100)  # Recompensa de 100 gemas
-                # DESBLOQUEO DE PERSONAJES
-                self.gestor_datos.datos["unlocked_loco"] = True
-                # Desbloquear snake solo si es modo difícil
-                if self.dificultad == MODO_DIFICIL:
-                    self.gestor_datos.datos["unlocked_snake"] = True
-                self.gestor_datos.guardar()
-                self.clicks_victoria = 0  # Contador de clicks para volver al menú
-                self.cambiar_estado(ESTADO_VICTORIA_FINAL)
-            else:
-                self.boss_instancia = None; self.nivel += 1; self.cambiar_estado(ESTADO_TRANSICION)
+             
+        # NOTA: La muerte del boss ahora se maneja inmediatamente arriba con return
+        # Este código ya no es necesario y podría causar condiciones de carrera
 
         impactos_bar_enemigo = pygame.sprite.groupcollide(self.proyectiles_enemigos, self.barreras, False, False)
         for p, barreras_golpeadas in impactos_bar_enemigo.items():
@@ -1213,7 +1233,20 @@ class Juego:
                 if math.hypot(self.mago.rect.centerx - m.rect.centerx, self.mago.rect.centery - m.rect.centery) < self.mago.radio_escudo: self.explosion_efecto(m.rect.centerx, m.rect.centery, NARANJA_FUEGO); m.kill()
 
     def explosion_efecto(self, x, y, color):
-        for _ in range(16): p = Particula(x, y, color); self.particulas.add(p); self.todos_sprites.add(p)
+        # OPTIMIZACIÓN: Limitar número máximo de partículas
+        max_particulas = 50
+        if len(self.particulas) >= max_particulas:
+            # Eliminar las partículas más antiguas para hacer espacio
+            particulas_list = list(self.particulas)
+            for p in particulas_list[:8]:
+                p.kill()
+        
+        # Reducir cantidad de partículas nuevas según carga actual
+        cantidad = 8 if len(self.particulas) > 30 else 16
+        for _ in range(cantidad): 
+            p = Particula(x, y, color)
+            self.particulas.add(p)
+            self.todos_sprites.add(p)
 
     def drop_powerup_enemigo(self, x, y, ahora):
         bonus_prob = 0.0
@@ -1691,7 +1724,7 @@ class Juego:
             pygame.draw.rect(self.pantalla, (100, 100, 130), self.rect_btn_importar, 2, border_radius=6)
             self.dibujar_texto("IMPORTAR", self.fuente_xs, BLANCO, self.rect_btn_importar.centerx, self.rect_btn_importar.centery)
 
-            # VERSION (v1.0.1)
+            # VERSION (v1.0.3)
             self.dibujar_texto(f"v{VERSION}", self.fuente_xs, GRIS_BOTON, 45, 20)
 
         elif self.estado == ESTADO_TIENDA:
@@ -1809,8 +1842,8 @@ class Juego:
                  pygame.draw.circle(s, (*COLOR_ESCUDO_PENDIENTE, alpha), (r, r), r, width=2)
                  self.pantalla.blit(s, (self.mago.rect.centerx - r + off_x, self.mago.rect.centery - r + off_y))
 
-            # Indicador de carga para Snake
-            if self.mago.tipo == "snake" and self.mago.cargando:
+            # Indicador de carga para Snake (siempre visible)
+            if self.mago.tipo == "snake":
                 barra_ancho = 60
                 barra_alto = 8
                 barra_x = self.mago.rect.centerx - barra_ancho // 2 + off_x
@@ -1827,9 +1860,9 @@ class Juego:
                 # Borde
                 pygame.draw.rect(self.pantalla, (255, 255, 255), (barra_x, barra_y, barra_ancho, barra_alto), 1)
                 
-                # Texto "CARGANDO" o "¡LISTO!"
-                texto_carga = "¡LISTO!" if progreso >= 1.0 else "CARGANDO"
-                self.dibujar_texto(texto_carga, self.fuente_xs, color_carga, barra_x + barra_ancho // 2, barra_y - 10)
+                # Borde verde brillante cuando está completamente cargado (listo para disparar)
+                if progreso >= 1.0:
+                    pygame.draw.rect(self.pantalla, (0, 255, 100), (barra_x - 2, barra_y - 2, barra_ancho + 4, barra_alto + 4), 2)
 
             self.dibujar_hud()
             
@@ -2023,10 +2056,22 @@ class Juego:
         self.pantalla.blit(s, (0, 0))
 
     def dibujar_texto(self, texto, fuente, color, x, y):
-        key = (texto, fuente, color)
-        if key not in self.text_cache:
-            self.text_cache[key] = fuente.render(str(texto), True, color)
+        # OPTIMIZACIÓN: Usar id de fuente y tamaño en la clave
+        key = (str(texto), id(fuente), fuente.get_height(), color)
         
+        if key not in self.text_cache:
+            # Limpiar cache si excede el tamaño máximo (LRU)
+            if len(self.text_cache) >= self.max_cache_size:
+                # Eliminar las entradas menos usadas
+                sorted_keys = sorted(self.text_cache_accesos.items(), key=lambda x: x[1])
+                for old_key, _ in sorted_keys[:20]:  # Eliminar 20 más antiguos
+                    del self.text_cache[old_key]
+                    del self.text_cache_accesos[old_key]
+            
+            self.text_cache[key] = fuente.render(str(texto), True, color)
+            self.text_cache_accesos[key] = 0
+        
+        self.text_cache_accesos[key] += 1
         s = self.text_cache[key]
         r = s.get_rect(center=(x, y))
         self.pantalla.blit(s, r)
