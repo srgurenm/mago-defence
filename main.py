@@ -2399,10 +2399,11 @@ class Juego:
                             self.cambiar_estado(ESTADO_MENU)
                     elif self.estado == ESTADO_TRANSICION: self.crear_horda(); self.cambiar_estado(ESTADO_JUGANDO)
                     elif self.estado == ESTADO_SELECCION_RECOMPENSA_BOSS:
-                        if ev.key == pygame.K_1: self.aplicar_recompensa_boss(0)
-                        elif ev.key == pygame.K_2: self.aplicar_recompensa_boss(1)
-                        elif ev.key == pygame.K_3: self.aplicar_recompensa_boss(2)
-                        self.cambiar_estado(ESTADO_TRANSICION)
+                        if ev.key in [pygame.K_1, pygame.K_2, pygame.K_3]:
+                            if ev.key == pygame.K_1: self.aplicar_recompensa_boss(0)
+                            elif ev.key == pygame.K_2: self.aplicar_recompensa_boss(1)
+                            elif ev.key == pygame.K_3: self.aplicar_recompensa_boss(2)
+                            self.cambiar_estado(ESTADO_TRANSICION)
                     elif self.estado == ESTADO_SELECCION_MEJORA:
                         if ev.key == pygame.K_1: self.aplicar_mejora_permanente(1)
                         elif ev.key == pygame.K_2: self.aplicar_mejora_permanente(2)

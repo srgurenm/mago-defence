@@ -255,6 +255,7 @@ class Boss(pygame.sprite.Sprite):
         self.en_rafaga = self.preparando_ataque = self.destruyendo = self.congelado = False
         self.balas_rafaga = self.timer_preparacion_inicio = self.timer_muerte = self.timer_descongelar = 0
         self.recoil_y = 0; self.alpha_muerte = 255
+        self.float_y = 0  # Nueva variable para la oscilación suave
 
     def cargar_imagen(self):
         try:
@@ -301,14 +302,23 @@ class Boss(pygame.sprite.Sprite):
         tinte.fill((*AZUL_CONGELADO, 120)); self.image.blit(tinte, (0,0), special_flags=pygame.BLEND_RGBA_ADD)
 
     def aplicar_glow(self, surf, color, intensity=0.5):
-        glow_surf = pygame.mask.from_surface(surf).to_surface(setcolor=(*color, int(255 * intensity)), unsetcolor=(0,0,0,0))
+        glow_size = surf.get_rect().size
+        glow_surf = pygame.Surface(glow_size, pygame.SRCALPHA)
+        glow_surf.fill((*color, int(150 * intensity)))
+        # Multiplicamos por la superficie original para obtener la silueta con su alpha
+        glow_surf.blit(surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        
         for i in range(2):
-             surf.blit(glow_surf, (random.randint(-3, 3), random.randint(-4, 4)))
+             surf.blit(glow_surf, (random.randint(-3, 3), random.randint(-4, 4)), special_flags=pygame.BLEND_RGBA_ADD)
         return surf
 
     def aplicar_tint(self, surf, color):
-        tinte = pygame.mask.from_surface(surf).to_surface(setcolor=(*color, 120), unsetcolor=(0,0,0,0))
-        surf.blit(tinte, (0,0))
+        tint_surf = pygame.Surface(surf.get_rect().size, pygame.SRCALPHA)
+        tint_surf.fill((*color, 255))
+        # Conservamos la silueta multiplicando por el alpha del original
+        tint_surf.blit(surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        # Aplicamos el tinte de forma aditiva sobre el original (solo donde hay píxeles)
+        surf.blit(tint_surf, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
         return surf
 
     def update(self, *args, **kwargs):
@@ -353,7 +363,7 @@ class Boss(pygame.sprite.Sprite):
             if self.pos_x <= 10 or self.pos_x + 160 >= ANCHO - 10: self.vx *= -1
             if self.pos_y <= 20 or self.pos_y + 140 >= LIMITE_INFERIOR_BOSS: self.vy *= -1
             if ahora > self.timer_ia: self.vx, self.vy = random.uniform(-4, 4), random.uniform(-2, 2); self.timer_ia = ahora + 3000
-        self.rect.x, self.rect.y = int(self.pos_x), int(self.pos_y + self.recoil_y)
+        self.rect.x, self.rect.y = int(self.pos_x), int(self.pos_y + self.recoil_y + self.float_y)
         
         # --- PATRONES DE ATAQUE POR VARIANTE ---
         cd_arco = BOSS_CD_ARCO
@@ -1616,9 +1626,10 @@ class BossSNAKE(Boss):
         self.cooldown_ataque_basico = 4000  # Aumentado a 4s para balancear Fase 1
 
         # Cola de disparos en cadena (efecto serpiente)
-        self.burst_queue = []  # lista de (timestamp_disparo, vx, vy)
+        self.burst_queue = []  # lista de (timestamp_disparo, vx, vy, radio)
         self.ultimo_ataque_abanico = 0
-        self.cooldown_ataque_abanico = 2000  # Aumentado a 2s para Fase 2/3
+        self.cooldown_ataque_abanico = 2500  # Intervalo entre abanicos
+        self.tercera_fase = False  # Activada al 35% de HP
 
         # Variables de animación
         self.anim_timer = 0
@@ -1694,18 +1705,16 @@ class BossSNAKE(Boss):
         efecto = self.image_original.copy()
         
         self.float_offset += 0.08
-        float_y = int(math.sin(self.float_offset) * 5)
-        
-        if float_y != 0:
-            temp = pygame.Surface((200, 180 + abs(float_y) * 2), pygame.SRCALPHA)
-            temp.blit(efecto, (0, abs(float_y) if float_y > 0 else 0))
-            efecto = temp
+        self.float_y = int(math.sin(self.float_offset) * 5)
         
         self.anim_timer += 1
         breath = 1.0 + math.sin(self.anim_timer * 0.1) * 0.03
         efecto = pygame.transform.scale(efecto, (int(200 * breath), int(180 / breath)))
         
-        if self.segunda_fase:
+        if self.tercera_fase:
+            tint = (255, 50, 255) # Morado/Magenta para fase extrema
+            efecto = self.aplicar_tint(efecto, tint)
+        elif self.segunda_fase:
             tint = (255, 100 + int(math.sin(self.anim_timer * 0.2) * 50), 100)
             efecto = self.aplicar_tint(efecto, tint)
         
@@ -1732,10 +1741,8 @@ class BossSNAKE(Boss):
         
         efecto = self.aplicar_glow(efecto, (255, 50, 0), 0.8)
         
-        shake = random.randint(-3, 3)
-        temp = pygame.Surface((200 + abs(shake) * 2, 180), pygame.SRCALPHA)
-        temp.blit(efecto, (abs(shake) if shake < 0 else 0, 0))
-        efecto = temp
+        # Shake visual sin crear superficies nuevas
+        self.float_y = random.randint(-4, 4)
         
         return efecto
 
@@ -1960,90 +1967,100 @@ class BossSNAKE(Boss):
         
         distancia_minima_ataque = 250  # Solo ataca si está a más de 250px del jugador
         
-        # Procesar cola de disparos en cadena (efecto serpiente)
-        if self.burst_queue and grupo_s and grupo_b:
-            while self.burst_queue and ahora >= self.burst_queue[0][0]:
-                _, vx_q, vy_q = self.burst_queue.pop(0)
-                p = Proyectil(self.rect.centerx, self.rect.centery + 45,
-                              vx_q, vy_q, 2, es_enemigo=True,
-                              color=(220, 80, 255), radio_custom=4)
-                grupo_s.add(p); grupo_b.add(p)
+        # Gestión de Fases por HP
+        porcentaje_hp = self.hp / self.hp_max
+        if not self.tercera_fase and porcentaje_hp < 0.35:
+            self.tercera_fase = True
+            self.segunda_fase = True
+        elif not self.segunda_fase and porcentaje_hp < 0.70:
+            self.segunda_fase = True
 
-        if not self.segunda_fase and not self.advertencia_laser_activa and not self.timer_advertencia and ahora - self.ultimo_ataque_basico > self.cooldown_ataque_basico and distancia_jugador > distancia_minima_ataque:
-            # Solo ataca si no hay otras advertencias activas Y está lejos del jugador
+        # Ajustar dificultad progresiva por fase
+        if self.tercera_fase:
+             self.cooldown_ataque_basico = 2000
+             self.cooldown_ataque_abanico = 2200
+        elif self.segunda_fase:
+             self.cooldown_ataque_basico = 3000
+             self.cooldown_ataque_abanico = 3000
+        else:
+             self.cooldown_ataque_basico = 4500
+
+        if self.burst_queue and grupo_s and grupo_b:
+            indices_pop = []
+            for i, (t_disparo, vx_q, vy_q, rad_q) in enumerate(self.burst_queue):
+                if ahora >= t_disparo:
+                    # Lógica de catch-up espacial
+                    dt_missed = (ahora - t_disparo) / 1000.0
+                    offset_x = vx_q * 60 * dt_missed
+                    offset_y = vy_q * 60 * dt_missed
+                    
+                    # Efecto Slither (Serpiente): Oscilación lateral perpendicular al movimiento
+                    # Calculamos el ángulo de movimiento para aplicar el offset perpendicularmente
+                    angulo_mov = math.atan2(vy_q, vx_q)
+                    # La oscilación depende del tiempo de disparo original para que sea consistente en la cadena
+                    oscilacion = math.sin(t_disparo * 0.01) * 15
+                    perp_x = math.cos(angulo_mov + math.pi/2) * oscilacion
+                    perp_y = math.sin(angulo_mov + math.pi/2) * oscilacion
+
+                    p = Proyectil(self.rect.centerx + offset_x + perp_x, self.rect.centery + 45 + offset_y + perp_y,
+                                  vx_q, vy_q, 2, es_enemigo=True,
+                                  color=(220, 80, 255) if rad_q < 5 else (255, 50, 50), 
+                                  radio_custom=rad_q)
+                    grupo_s.add(p); grupo_b.add(p)
+                    indices_pop.append(i)
+                else: break
+            
+            for i in reversed(indices_pop):
+                self.burst_queue.pop(i)
+
+        # ATAQUE 1: Cadenas Slither (En todas las fases)
+        if not self.advertencia_laser_activa and not self.timer_advertencia and ahora - self.ultimo_ataque_basico > self.cooldown_ataque_basico and distancia_jugador > distancia_minima_ataque:
             self.ultimo_ataque_basico = ahora
-            # Calcular dirección hacia el jugador para la cadena
             if mago:
                 dx_m = mago.rect.centerx - self.rect.centerx
                 dy_m = mago.rect.centery - self.rect.centery
                 ang_base = math.atan2(dy_m, dx_m)
-            else:
-                ang_base = math.radians(90)  # Hacia abajo por defecto
+            else: ang_base = math.radians(90)
 
-            speed = 5 if self.dificultad == MODO_NORMAL else 6.5
-            vx_base = math.cos(ang_base) * speed
-            vy_base = math.sin(ang_base) * speed
-
-            # Cadena: 4 proyectiles (Normal) / 5 proyectiles (Difícil), 250ms entre cada uno
+            speed = 5.5 if self.dificultad == MODO_NORMAL else 6.8
+            vx_base, vy_base = math.cos(ang_base) * speed, math.sin(ang_base) * speed
+            # Cadena: 4 (Normal) / 5 (Difícil), 180ms entre cada uno
             chain_len = 4 if self.dificultad == MODO_NORMAL else 5
             for i in range(chain_len):
-                self.burst_queue.append((ahora + i * 250, vx_base, vy_base))
+                self.burst_queue.append((ahora + i * 180, vx_base, vy_base, 4))
  
-        if self.segunda_fase:
-            # Fase 2: Lluvia de proyectiles en abanico con cooldown equilibrado
+        # ATAQUE 2: Abanico (Solo en Fase 3)
+        if self.tercera_fase:
             if ahora - self.ultimo_ataque_abanico > self.cooldown_ataque_abanico:
                  self.ultimo_ataque_abanico = ahora
-                 # 7 proyectiles en abanico (45 a 135 grados)
-                 for a in range(45, 136, 15):
-                     rad = math.radians(a)
-                     vx, vy = math.cos(rad) * 6, math.sin(rad) * 6
-                     # Usar un radio un poco más pequeño para que sea más esquivable
-                     p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(255, 50, 50), radio_custom=12)
-                     grupo_s.add(p); grupo_b.add(p)
-        else:
-            # Fase 1: Láseres con aviso previo visual
-            if not self.advertencia_laser_activa and ahora - self.ultimo_laser > 5000:
-                # Iniciar advertencia 1.5 segundos antes del láser
-                self.advertencia_laser_activa = True
-                self.tiempo_advertencia_laser = ahora + self.duracion_advertencia_laser
-                self.tipo_laser_pendiente = random.choice(["boca", "ojos"])
-                
-                # Crear líneas de advertencia visuales inmediatamente
-                # Guardar posiciones exactas para que el láser salga exactamente donde se muestra la advertencia
-                if 0 < self.rect.centerx < ANCHO and 0 < self.rect.centery < ALTO:
-                    if self.tipo_laser_pendiente == "boca":
-                        # Láser desde la boca apuntando al jugador
-                        dx = mago.rect.centerx - self.rect.centerx
-                        dy = mago.rect.centery - self.rect.centery
-                        ang = math.degrees(math.atan2(dy, dx))
-                        # Guardar posición y ángulo exactos
-                        self.laser_pos_x = self.rect.centerx
-                        self.laser_pos_y = self.rect.centery + 40
-                        self.laser_angulo = ang
-                        adv = AdvertenciaLaser(self.laser_pos_x, self.laser_pos_y, self.laser_angulo, self.duracion_advertencia_laser)
-                        self.advertencias_laser_grupo.add(adv)
-                        grupo_s.add(adv)
-                    else:
-                        # Dos láseres desde los ojos en ángulos fijos
-                        ojo_izq_x = self.rect.x + self.ojo_izq_pos[0]
-                        ojo_izq_y = self.rect.y + self.ojo_izq_pos[1]
-                        ojo_der_x = self.rect.x + self.ojo_der_pos[0]
-                        ojo_der_y = self.rect.y + self.ojo_der_pos[1]
-                        
-                        # Guardar posiciones exactas
-                        self.laser_ojo_izq_x = ojo_izq_x
-                        self.laser_ojo_izq_y = ojo_izq_y
-                        self.laser_ojo_der_x = ojo_der_x
-                        self.laser_ojo_der_y = ojo_der_y
-                        
-                        if 0 < ojo_izq_x < ANCHO and 0 < ojo_izq_y < ALTO:
-                            adv1 = AdvertenciaLaser(ojo_izq_x, ojo_izq_y, 70, self.duracion_advertencia_laser)
-                            self.advertencias_laser_grupo.add(adv1)
-                            grupo_s.add(adv1)
-                        if 0 < ojo_der_x < ANCHO and 0 < ojo_der_y < ALTO:
-                            adv2 = AdvertenciaLaser(ojo_der_x, ojo_der_y, 110, self.duracion_advertencia_laser)
-                            self.advertencias_laser_grupo.add(adv2)
-                            grupo_s.add(adv2)
+                 for a in range(45, 136, 18):
+                     rad_ang = math.radians(a)
+                     vx, vy = math.cos(rad_ang) * 5.5, math.sin(rad_ang) * 5.5
+                     for i in range(3):
+                         self.burst_queue.append((ahora + i * 150, vx, vy, 5))
+
+        # ATAQUE 3: Láseres (En todas las fases, dinámico)
+        cd_laser = 5000 if not self.segunda_fase else (4000 if not self.tercera_fase else 3200)
+        if not self.advertencia_laser_activa and ahora - self.ultimo_laser > cd_laser:
+            self.advertencia_laser_activa = True
+            self.tiempo_advertencia_laser = ahora + self.duracion_advertencia_laser
+            self.tipo_laser_pendiente = random.choice(["boca", "ojos"])
+            
+            if 0 < self.rect.centerx < ANCHO and 0 < self.rect.centery < ALTO:
+                if self.tipo_laser_pendiente == "boca":
+                    dx, dy = (mago.rect.centerx - self.rect.centerx, mago.rect.centery - self.rect.centery) if mago else (0, 1)
+                    ang = math.degrees(math.atan2(dy, dx))
+                    self.laser_pos_x, self.laser_pos_y, self.laser_angulo = self.rect.centerx, self.rect.centery + 45, ang
+                    adv = AdvertenciaLaser(self.laser_pos_x, self.laser_pos_y, self.laser_angulo, self.duracion_advertencia_laser)
+                    self.advertencias_laser_grupo.add(adv); grupo_s.add(adv)
+                else:
+                    ojo_izq_x, ojo_izq_y = self.rect.x + self.ojo_izq_pos[0], self.rect.y + self.ojo_izq_pos[1]
+                    ojo_der_x, ojo_der_y = self.rect.x + self.ojo_der_pos[0], self.rect.y + self.ojo_der_pos[1]
+                    self.laser_ojo_izq_x, self.laser_ojo_izq_y = ojo_izq_x, ojo_izq_y
+                    self.laser_ojo_der_x, self.laser_ojo_der_y = ojo_der_x, ojo_der_y
+                    adv1 = AdvertenciaLaser(ojo_izq_x, ojo_izq_y, 70, self.duracion_advertencia_laser)
+                    adv2 = AdvertenciaLaser(ojo_der_x, ojo_der_y, 110, self.duracion_advertencia_laser)
+                    self.advertencias_laser_grupo.add(adv1, adv2); grupo_s.add(adv1, adv2)
             
             # Actualizar y lanzar láser cuando termine la advertencia
             self.advertencias_laser_grupo.update()
@@ -2070,11 +2087,9 @@ class BossSNAKE(Boss):
                 else:
                     # Durante la advertencia, el boss brilla ligeramente en rojo
                     tiempo_restante = self.tiempo_advertencia_laser - ahora
-                    # Efecto de brillo rojo creciente
-                    brillo = int(50 + (1 - tiempo_restante / self.duracion_advertencia_laser) * 100)
-                    tinte = (255, 100, 100)
-                    temp = self.image.copy()
-                    overlay = pygame.Surface(temp.get_size(), pygame.SRCALPHA)
-                    overlay.fill((*tinte, brillo))
-                    temp.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
-                    self.image = temp
+                    intensidad = 1 - (tiempo_restante / self.duracion_advertencia_laser)
+                    self.image = self.aplicar_tint(self.image.copy(), (255, 50, 50))
+                    # Podríamos ajustar el alpha si aplicar_tint permitiera intensidad,
+                    # pero por ahora aplicar_tint es binario (silueta teñida fija).
+                    # Para el pulso de aviso, esto ya elimina el cuadro rojo.
+                    pass
