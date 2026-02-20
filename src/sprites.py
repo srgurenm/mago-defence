@@ -845,6 +845,10 @@ class BossSNAKE(pygame.sprite.Sprite):
         self.embestir_target_x = 0
         self.laser_cooldown = 0
 
+        # Cola de disparos en cadena (efecto serpiente)
+        self.burst_queue = []   # lista de (timestamp, vx, vy)
+        self.burst_angle = 0    # ángulo fijo de la cadena actual
+
         self.image = pygame.Surface((100, 100), pygame.SRCALPHA)
         pygame.draw.circle(self.image, (150, 0, 100), (50, 50), 45)
         pygame.draw.circle(self.image, (200, 50, 150), (50, 50), 30)
@@ -852,20 +856,32 @@ class BossSNAKE(pygame.sprite.Sprite):
         pygame.draw.circle(self.image, (255, 0, 0), (50, 40), 5)
 
     def update(self, ahora=None, grupo_s=None, grupo_b=None, mago=None):
-        if self.destruuyendo:
+        if self.destruyendo:
             return
         if self.frozen:
             if ahora and ahora > self.unfreeze_timer:
                 self.frozen = False
             return
 
+        # --- Procesar cola de disparos en cadena ---
+        if ahora and self.burst_queue and grupo_s and grupo_b:
+            while self.burst_queue and ahora >= self.burst_queue[0][0]:
+                _, vx, vy = self.burst_queue.pop(0)
+                proj = Projectile(
+                    self.rect.centerx, self.rect.centery,
+                    vx, vy, 3,
+                    is_enemy=True, custom_radius=5
+                )
+                grupo_s.add(proj)
+                grupo_b.add(proj)
+
         if self.phase == "normal":
             self.rect.x += self.vel_x * self.direction_x
             if self.rect.right >= SCREEN_WIDTH - 50 or self.rect.left <= 50:
                 self.direction_x *= -1
             if ahora and self.attack_cooldown < ahora:
-                self._do_attack(grupo_s, grupo_b, mago)
-                self.attack_cooldown = ahora + random.randint(2000, 3500)
+                self._do_attack(grupo_s, grupo_b, mago, ahora)
+                self.attack_cooldown = ahora + random.randint(2200, 3500)
         elif self.phase == "embestir":
             speed = 15
             dx = self.embestir_target_x - self.rect.centerx
@@ -876,26 +892,38 @@ class BossSNAKE(pygame.sprite.Sprite):
             else:
                 self.rect.x += (1 if dx > 0 else -1) * speed
 
-    def _do_attack(self, grupo_s, grupo_b, mago):
-        if random.random() < 0.4 and ahora and self.laser_cooldown < ahora:
+    def _do_attack(self, grupo_s, grupo_b, mago, ahora):
+        if random.random() < 0.4 and self.laser_cooldown < ahora:
             angle = random.uniform(-70, -110)
             laser = LaserSNAKE(self.rect.centerx, self.rect.centery, angle, 500)
             grupo_s.add(laser)
             self.laser_cooldown = ahora + 5000
-        elif random.random() < 0.3:
+        elif random.random() < 0.3 and mago:
             self.embestir_target_x = mago.rect.centerx
             self.phase = "embestir"
             self.embestiendo = True
         else:
-            for _ in range(8):
-                ang = random.uniform(-60, -120)
-                rad = math.radians(ang)
-                vx = math.cos(rad) * random.uniform(4, 7)
-                vy = math.sin(rad) * random.uniform(4, 7)
-                bomb = Projectile(self.rect.centerx, self.rect.centery, vx, vy, 4,
-                                  is_enemy=True, es_bomba=True, radio_custom=18)
-                grupo_s.add(bomb)
-                grupo_b.add(bomb)
+            # Cadena de proyectiles pequeños en sucesión rápida (efecto serpiente)
+            # Calcular dirección hacia el mago o aleatoria si no hay mago
+            if mago:
+                dx = mago.rect.centerx - self.rect.centerx
+                dy = mago.rect.centery - self.rect.centery
+                dist = math.hypot(dx, dy) or 1
+                base_ang = math.atan2(dy, dx)
+            else:
+                base_ang = math.radians(random.uniform(-60, -120))
+
+            speed = 6 if self.difficulty == MODE_NORMAL else 7.5
+            vx_base = math.cos(base_ang) * speed
+            vy_base = math.sin(base_ang) * speed
+
+            # Número de proyectiles: 4 normal / 5 difícil
+            chain_len = 4 if self.difficulty == MODE_NORMAL else 5
+            delay_ms = 120  # ms entre cada proyectil de la cadena
+
+            for i in range(chain_len):
+                fire_time = ahora + i * delay_ms
+                self.burst_queue.append((fire_time, vx_base, vy_base))
 
     def freeze(self):
         self.frozen = True

@@ -147,12 +147,13 @@ class Proyectil(pygame.sprite.Sprite):
 
     def update(self, *args, **kwargs):
         monstruos = kwargs.get('monstruos', None)
+        boss = kwargs.get('boss', None)
         if not monstruos and args and isinstance(args[0], pygame.sprite.Group): monstruos = args[0]
         
         if self.es_homing:
             if (not self.target or not self.target.alive()):
                 if monstruos:
-                    self.target = self.buscar_target(monstruos)
+                    self.target = self.buscar_target(monstruos, boss)
             
             if self.target and self.target.alive():
                 dx, dy = self.target.rect.centerx - self.rect.centerx, self.target.rect.centery - self.rect.centery
@@ -177,10 +178,13 @@ class Proyectil(pygame.sprite.Sprite):
             (self.rebotes <= 0 and (self.rect.left > ANCHO or self.rect.right < 0))):
             self.kill()
 
-    def buscar_target(self, monstruos):
+    def buscar_target(self, monstruos, boss=None):
         target, d_min = None, 9999
-        for m in monstruos:
-            if m.alive() and m.rect.centery < self.rect.centery: 
+        candidatos = list(monstruos)
+        if boss and boss.alive() and not boss.destruyendo:
+            candidatos.append(boss)
+        for m in candidatos:
+            if m.alive():
                 d = math.hypot(m.rect.centerx - self.rect.centerx, m.rect.centery - self.rect.centery)
                 if d < d_min:
                     d_min, target = d, m
@@ -299,13 +303,12 @@ class Boss(pygame.sprite.Sprite):
     def aplicar_glow(self, surf, color, intensity=0.5):
         glow_surf = pygame.mask.from_surface(surf).to_surface(setcolor=(*color, int(255 * intensity)), unsetcolor=(0,0,0,0))
         for i in range(2):
-             surf.blit(glow_surf, (random.randint(-3, 3), random.randint(-3, 3)), special_flags=pygame.BLEND_RGBA_ADD)
+             surf.blit(glow_surf, (random.randint(-3, 3), random.randint(-4, 4)))
         return surf
 
     def aplicar_tint(self, surf, color):
-        tinte = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-        tinte.fill((*color, 120))
-        surf.blit(tinte, (0,0), special_flags=pygame.BLEND_RGBA_ADD)
+        tinte = pygame.mask.from_surface(surf).to_surface(setcolor=(*color, 120), unsetcolor=(0,0,0,0))
+        surf.blit(tinte, (0,0))
         return surf
 
     def update(self, *args, **kwargs):
@@ -1610,7 +1613,12 @@ class BossSNAKE(Boss):
         
         # Ataques básicos (proyectiles hacia abajo)
         self.ultimo_ataque_basico = 0
-        self.cooldown_ataque_basico = 2500  # Cada 2.5 segundos
+        self.cooldown_ataque_basico = 4000  # Aumentado a 4s para balancear Fase 1
+
+        # Cola de disparos en cadena (efecto serpiente)
+        self.burst_queue = []  # lista de (timestamp_disparo, vx, vy)
+        self.ultimo_ataque_abanico = 0
+        self.cooldown_ataque_abanico = 2000  # Aumentado a 2s para Fase 2/3
 
         # Variables de animación
         self.anim_timer = 0
@@ -1952,24 +1960,45 @@ class BossSNAKE(Boss):
         
         distancia_minima_ataque = 250  # Solo ataca si está a más de 250px del jugador
         
+        # Procesar cola de disparos en cadena (efecto serpiente)
+        if self.burst_queue and grupo_s and grupo_b:
+            while self.burst_queue and ahora >= self.burst_queue[0][0]:
+                _, vx_q, vy_q = self.burst_queue.pop(0)
+                p = Proyectil(self.rect.centerx, self.rect.centery + 45,
+                              vx_q, vy_q, 2, es_enemigo=True,
+                              color=(220, 80, 255), radio_custom=4)
+                grupo_s.add(p); grupo_b.add(p)
+
         if not self.segunda_fase and not self.advertencia_laser_activa and not self.timer_advertencia and ahora - self.ultimo_ataque_basico > self.cooldown_ataque_basico and distancia_jugador > distancia_minima_ataque:
             # Solo ataca si no hay otras advertencias activas Y está lejos del jugador
             self.ultimo_ataque_basico = ahora
-            # 3 proyectiles en arco hacia abajo
-            for angulo in [60, 90, 120]:
-                rad = math.radians(angulo)
-                vx = math.cos(rad) * 5
-                vy = math.sin(rad) * 5
-                p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(200, 100, 255))
-                grupo_s.add(p); grupo_b.add(p)
+            # Calcular dirección hacia el jugador para la cadena
+            if mago:
+                dx_m = mago.rect.centerx - self.rect.centerx
+                dy_m = mago.rect.centery - self.rect.centery
+                ang_base = math.atan2(dy_m, dx_m)
+            else:
+                ang_base = math.radians(90)  # Hacia abajo por defecto
+
+            speed = 5 if self.dificultad == MODO_NORMAL else 6.5
+            vx_base = math.cos(ang_base) * speed
+            vy_base = math.sin(ang_base) * speed
+
+            # Cadena: 4 proyectiles (Normal) / 5 proyectiles (Difícil), 250ms entre cada uno
+            chain_len = 4 if self.dificultad == MODO_NORMAL else 5
+            for i in range(chain_len):
+                self.burst_queue.append((ahora + i * 250, vx_base, vy_base))
  
         if self.segunda_fase:
-            # Fase 2: Lluvia de proyectiles en abanico
-            if ahora % 800 < 50:
-                 for a in range(45, 135, 15):
+            # Fase 2: Lluvia de proyectiles en abanico con cooldown equilibrado
+            if ahora - self.ultimo_ataque_abanico > self.cooldown_ataque_abanico:
+                 self.ultimo_ataque_abanico = ahora
+                 # 7 proyectiles en abanico (45 a 135 grados)
+                 for a in range(45, 136, 15):
                      rad = math.radians(a)
                      vx, vy = math.cos(rad) * 6, math.sin(rad) * 6
-                     p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(255, 50, 50))
+                     # Usar un radio un poco más pequeño para que sea más esquivable
+                     p = Proyectil(self.rect.centerx, self.rect.bottom, vx, vy, 1, es_enemigo=True, color=(255, 50, 50), radio_custom=12)
                      grupo_s.add(p); grupo_b.add(p)
         else:
             # Fase 1: Láseres con aviso previo visual

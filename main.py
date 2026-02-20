@@ -1752,7 +1752,7 @@ class Juego:
                 elif key == "snake":
                     unlocked = self.gestor_datos.datos.get("unlocked_snake", False) or (settings.DEBUG_MODE and settings.DEBUG_ALL_UNLOCKED)
                 
-                # En modo debug, mostrar indicador
+                # Debug menu
                 if settings.DEBUG_MODE and settings.DEBUG_ALL_UNLOCKED:
                     unlocked = True
                 
@@ -1783,7 +1783,7 @@ class Juego:
                     except:
                         pass
                 
-                # Nombre en la parte superior (Ajustado)
+                # Nombre en la parte superior 
                 self.dibujar_texto_ajustado(d["nombre"], self.fuente_md, d["color"], pygame.Rect(rect.x + 5, rect.top + 100, rect.width - 10, 30))
                 
                 # Descripción principal
@@ -1821,11 +1821,11 @@ class Juego:
             self.dibujar_texto("Presiona click para elegir y comenzar", self.fuente_sm, BLANCO, ANCHO//2, ALTO - 40)
 
         elif self.estado in [ESTADO_JUGANDO, ESTADO_PAUSA, ESTADO_GAMEOVER, ESTADO_TRANSICION, ESTADO_SELECCION_MEJORA, ESTADO_SELECCION_RECOMPENSA_BOSS, ESTADO_VICTORIA_FINAL]:
-            # --- DIBUJAR BALCÓN (LIMITE VISUAL) ---
+            # --- DIBUJAR BALCÓN  ---
             y_balcon = ALTO - 50
             # Piso del balcón
             pygame.draw.rect(self.pantalla, (40, 40, 50), [0, y_balcon, ANCHO, ALTO-y_balcon])
-            # Borde superior del balcón (Barandilla)
+            # Borde superior del balcón 
             pygame.draw.line(self.pantalla, (100, 100, 120), (0, y_balcon), (ANCHO, y_balcon), 5)
             # Sombra/Profundidad
             pygame.draw.rect(self.pantalla, (20, 20, 30), [0, y_balcon+5, ANCHO, 10])
@@ -1842,7 +1842,7 @@ class Juego:
                  pygame.draw.circle(s, (*COLOR_ESCUDO_PENDIENTE, alpha), (r, r), r, width=2)
                  self.pantalla.blit(s, (self.mago.rect.centerx - r + off_x, self.mago.rect.centery - r + off_y))
 
-            # Indicador de carga para Snake (siempre visible)
+            # Indicador de carga para Snake 
             if self.mago.tipo == "snake":
                 barra_ancho = 60
                 barra_alto = 8
@@ -2170,7 +2170,7 @@ class Juego:
                         if (m.rect.right >= ANCHO and m.dir == 1) or (m.rect.left <= 0 and m.dir == -1): borde = True
                 if borde: [m.bajar() for m in self.monstruos]
             
-            self.todos_sprites.update(mago=self.mago, monstruos=self.monstruos, grupo_s=self.todos_sprites, grupo_b=self.proyectiles_enemigos); self.manejar_colisiones()
+            self.todos_sprites.update(mago=self.mago, monstruos=self.monstruos, grupo_s=self.todos_sprites, grupo_b=self.proyectiles_enemigos, boss=self.boss_instancia); self.manejar_colisiones()
             
             if not self.monstruos and not self.boss_instancia and self.estado == ESTADO_JUGANDO:
                 # Auto-recoger XP no recolectado antes de pasar de nivel
